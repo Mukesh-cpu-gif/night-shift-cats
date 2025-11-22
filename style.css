@@ -693,3 +693,40 @@ h1 {
     background-color: rgba(255, 255, 255, 0.5);
     transform: scale(0.95);
 }
+
+/* Music Player */
+#music-player {
+    position: absolute;
+    top: 10px;
+    left: 10px;
+    z-index: 200;
+    pointer-events: auto;
+}
+
+#music-toggle {
+    background-color: rgba(0, 0, 0, 0.6);
+    color: white;
+    border: 1px solid rgba(255, 255, 255, 0.3);
+    padding: 8px 12px;
+    border-radius: 20px;
+    cursor: pointer;
+    font-size: 14px;
+    transition: all 0.2s;
+}
+
+#music-toggle:hover {
+    background-color: rgba(0, 0, 0, 0.8);
+    border-color: white;
+}
+
+#youtube-frame-container {
+    position: absolute;
+    top: 40px;
+    left: 0;
+    background-color: black;
+    border: 2px solid #333;
+    border-radius: 4px;
+    overflow: hidden;
+    width: 200px;
+    height: 150px;
+}

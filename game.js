@@ -109,12 +109,14 @@ function startGame(role) {
 
 // Input Listeners
 window.addEventListener('keydown', (e) => {
-    if (keys.hasOwnProperty(e.key)) keys[e.key] = true;
+    const key = e.key.length === 1 ? e.key.toLowerCase() : e.key;
+    if (keys.hasOwnProperty(key)) keys[key] = true;
     if (e.key === 'Enter' && playerRoom === 'hangout') sendChat();
 });
 
 window.addEventListener('keyup', (e) => {
-    if (keys.hasOwnProperty(e.key)) keys[e.key] = false;
+    const key = e.key.length === 1 ? e.key.toLowerCase() : e.key;
+    if (keys.hasOwnProperty(key)) keys[key] = false;
 });
 
 // Mobile Controls
@@ -141,51 +143,72 @@ if (btnUp) {
     setupMobileBtn(btnRight, 'ArrowRight');
 }
 
+// Music Logic
+const bgMusic = document.getElementById('bg-music');
+const musicBtn = document.getElementById('music-toggle');
+
+function toggleMusic() {
+    if (bgMusic.paused) {
+        bgMusic.play().catch(e => console.log("Audio play failed:", e));
+        musicBtn.innerText = "🎵 Pause Music";
+    } else {
+        bgMusic.pause();
+        musicBtn.innerText = "🎵 Play Lofi";
+    }
+}
+
 // Game Loop
 function gameLoop() {
     if (!isGameRunning) return;
 
-    handleMovement();
-    checkRoomTransitions();
-    checkDeskProximity();
-    renderMyPlayer();
+    try {
+        let dx = 0;
+        let dy = 0;
 
-    if (Date.now() - lastNetworkUpdate > 100) {
-        updateMyPosition();
-        lastNetworkUpdate = Date.now();
+        // Movement Logic
+        if (document.activeElement !== chatInput) {
+            if (keys.w || keys.ArrowUp) dy -= speed;
+            if (keys.s || keys.ArrowDown) dy += speed;
+            if (keys.a || keys.ArrowLeft) dx -= speed;
+            if (keys.d || keys.ArrowRight) dx += speed;
+
+            if (dx !== 0 && dy !== 0) {
+                dx *= 0.707;
+                dy *= 0.707;
+            }
+
+            playerX += dx;
+            playerY += dy;
+
+            // Bounds checking
+            if (playerX < 0) playerX = 0;
+            if (playerY < 0) playerY = 0;
+            if (playerX > 760) playerX = 760;
+            if (playerY > 560) playerY = 560;
+        }
+
+        checkRoomTransitions();
+        checkDeskProximity();
+        renderMyPlayer();
+
+        if (Date.now() - lastNetworkUpdate > 100) {
+            updateMyPosition();
+            lastNetworkUpdate = Date.now();
+        }
+
+        // Cleanup stale players every 1 second
+        if (Date.now() - lastCleanup > 1000) {
+            cleanupStalePlayers();
+            lastCleanup = Date.now();
+        }
+
+        updatePersonalTimer();
+
+    } catch (e) {
+        console.error("Game Loop Error:", e);
     }
-
-    updatePersonalTimer();
 
     requestAnimationFrame(gameLoop);
-}
-
-let lastNetworkUpdate = 0;
-
-function handleMovement() {
-    if (document.activeElement === chatInput) return;
-
-    let dx = 0;
-    let dy = 0;
-
-    if (keys.w || keys.ArrowUp) dy -= speed;
-    if (keys.s || keys.ArrowDown) dy += speed;
-    if (keys.a || keys.ArrowLeft) dx -= speed;
-    if (keys.d || keys.ArrowRight) dx += speed;
-
-    if (dx !== 0 && dy !== 0) {
-        dx *= 0.707;
-        dy *= 0.707;
-    }
-
-    playerX += dx;
-    playerY += dy;
-
-    // Bounds checking
-    if (playerX < 0) playerX = 0;
-    if (playerY < 0) playerY = 0;
-    if (playerX > 760) playerX = 760;
-    if (playerY > 560) playerY = 560;
 }
 
 function checkRoomTransitions() {
@@ -284,6 +307,11 @@ function setupPlayerListeners() {
 
 function createPlayerElement(id, data) {
     if (players[id]) return;
+
+    // Don't spawn stale players (older than 10 seconds)
+    if (data.lastUpdated && (Date.now() - data.lastUpdated > 10000)) {
+        return;
+    }
 
     const el = document.createElement('div');
     el.className = `player ${data.role}`;
