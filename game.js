@@ -158,6 +158,21 @@ function toggleMusic() {
 }
 
 // Game Loop
+let lastNetworkUpdate = 0;
+let lastCleanup = 0;
+
+function cleanupStalePlayers() {
+    const now = Date.now();
+    Object.keys(players).forEach(id => {
+        if (id === playerId) return; // Don't remove self
+
+        // If lastUpdated is older than 10 seconds, remove
+        if (players[id].data.lastUpdated && (now - players[id].data.lastUpdated > 10000)) {
+            removePlayerElement(id);
+        }
+    });
+}
+
 function gameLoop() {
     if (!isGameRunning) return;
 
@@ -328,8 +343,11 @@ function createPlayerElement(id, data) {
 }
 
 function updatePlayerElement(id, data) {
+    if (!players[id]) {
+        createPlayerElement(id, data);
+        if (!players[id]) return; // Still stale/ignored
+    }
     const p = players[id];
-    if (!p) return;
     p.data = data;
 
     if (id === playerId) return;
