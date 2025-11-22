@@ -206,15 +206,20 @@ function gameLoop() {
         checkDeskProximity();
         renderMyPlayer();
 
-        if (Date.now() - lastNetworkUpdate > 100) {
+        // Update network position more frequently if moving
+        const now = Date.now();
+        const isMoving = dx !== 0 || dy !== 0;
+        const updateInterval = isMoving ? 50 : 100; // Faster updates when moving
+
+        if (now - lastNetworkUpdate > updateInterval) {
             updateMyPosition();
-            lastNetworkUpdate = Date.now();
+            lastNetworkUpdate = now;
         }
 
         // Cleanup stale players every 1 second
-        if (Date.now() - lastCleanup > 1000) {
+        if (now - lastCleanup > 1000) {
             cleanupStalePlayers();
-            lastCleanup = Date.now();
+            lastCleanup = now;
         }
 
         updatePersonalTimer();
