@@ -1,0 +1,362 @@
+:root {
+    --bg-color: #1a1a2e;
+    --floor-color: #16213e;
+    --accent-color: #0f3460;
+    --text-color: #e94560;
+    --boy-color: #4361ee;
+    --girl-color: #f72585;
+    --glow-color: rgba(255, 255, 255, 0.1);
+}
+
+* {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    user-select: none;
+}
+
+body {
+    background-color: #000;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 100vh;
+    overflow: hidden;
+    color: white;
+}
+
+#game-container {
+    position: relative;
+    width: 800px;
+    height: 600px;
+    background-color: var(--floor-color);
+    border-radius: 10px;
+    box-shadow: 0 0 20px rgba(0,0,0,0.5);
+    overflow: hidden;
+}
+
+/* World Objects */
+#world {
+    position: relative;
+    width: 100%;
+    height: 100%;
+}
+
+.window {
+    position: absolute;
+    top: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 200px;
+    height: 120px;
+    background: linear-gradient(to bottom, #0b1026, #2b32b2);
+    border: 4px solid #333;
+    border-radius: 4px;
+    overflow: hidden;
+}
+
+.moon {
+    position: absolute;
+    top: 10px;
+    right: 20px;
+    width: 30px;
+    height: 30px;
+    background-color: #fffcdd;
+    border-radius: 50%;
+    box-shadow: 0 0 10px #fffcdd;
+}
+
+.star {
+    position: absolute;
+    width: 2px;
+    height: 2px;
+    background-color: white;
+    border-radius: 50%;
+    animation: twinkle 2s infinite alternate;
+}
+
+@keyframes twinkle {
+    from { opacity: 0.3; }
+    to { opacity: 1; }
+}
+
+.desk {
+    position: absolute;
+    width: 120px;
+    height: 60px;
+    background-color: #4a4e69;
+    border-radius: 4px;
+    box-shadow: 2px 2px 5px rgba(0,0,0,0.3);
+}
+
+.monitor {
+    position: absolute;
+    top: -30px;
+    left: 20px;
+    width: 80px;
+    height: 50px;
+    background-color: #222;
+    border: 2px solid #444;
+    border-radius: 2px;
+    box-shadow: 0 0 10px rgba(100, 200, 255, 0.2);
+}
+
+.monitor::after {
+    content: '';
+    position: absolute;
+    top: 5px;
+    left: 5px;
+    right: 5px;
+    bottom: 5px;
+    background: linear-gradient(135deg, #2c3e50, #4ca1af);
+    opacity: 0.8;
+    animation: screen-glow 3s infinite alternate;
+}
+
+@keyframes screen-glow {
+    from { opacity: 0.6; }
+    to { opacity: 0.9; }
+}
+
+.keyboard {
+    position: absolute;
+    bottom: 10px;
+    left: 30px;
+    width: 60px;
+    height: 15px;
+    background-color: #333;
+    border-radius: 2px;
+}
+
+.plant {
+    position: absolute;
+    width: 40px;
+    height: 40px;
+    background-color: #2d6a4f;
+    border-radius: 50%;
+    box-shadow: inset -5px -5px 10px rgba(0,0,0,0.3);
+}
+
+.coffee-machine {
+    position: absolute;
+    width: 30px;
+    height: 40px;
+    background-color: #bc4749;
+    border-radius: 4px;
+}
+
+/* Character Styles */
+.player {
+    position: absolute;
+    width: 40px;
+    height: 40px;
+    transition: transform 0.1s linear; /* Smooth interpolation handled by JS mostly, but this helps */
+    z-index: 10;
+}
+
+.cat-body {
+    width: 100%;
+    height: 100%;
+    border-radius: 50%;
+    position: relative;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.3);
+}
+
+.ears {
+    position: absolute;
+    top: -5px;
+    width: 100%;
+    height: 20px;
+}
+
+.ears::before, .ears::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    width: 0;
+    height: 0;
+    border-left: 10px solid transparent;
+    border-right: 10px solid transparent;
+    border-bottom: 15px solid;
+}
+
+.ears::before { left: 0; }
+.ears::after { right: 0; }
+
+.face {
+    position: absolute;
+    top: 10px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 20px;
+    height: 10px;
+}
+
+.face::before, .face::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    width: 4px;
+    height: 4px;
+    background-color: #000;
+    border-radius: 50%;
+}
+
+.face::before { left: 2px; }
+.face::after { right: 2px; }
+
+.nickname {
+    position: absolute;
+    top: -25px;
+    left: 50%;
+    transform: translateX(-50%);
+    background-color: rgba(0,0,0,0.5);
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-size: 12px;
+    white-space: nowrap;
+    color: white;
+}
+
+/* Boy Cat Specifics */
+.player.boy .cat-body { background-color: var(--boy-color); }
+.player.boy .ears::before, .player.boy .ears::after { border-bottom-color: var(--boy-color); }
+
+/* Girl Cat Specifics */
+.player.girl .cat-body { background-color: var(--girl-color); }
+.player.girl .ears::before, .player.girl .ears::after { border-bottom-color: var(--girl-color); }
+
+/* UI Layer */
+#ui-layer {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+}
+
+#legend {
+    position: absolute;
+    bottom: 10px;
+    left: 10px;
+    background-color: rgba(0,0,0,0.6);
+    padding: 10px;
+    border-radius: 5px;
+    font-size: 14px;
+}
+
+#connection-status {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    background-color: rgba(255, 0, 0, 0.7);
+    padding: 5px 10px;
+    border-radius: 4px;
+    font-size: 12px;
+}
+
+.hidden {
+    display: none;
+}
+
+/* Start Screen */
+#start-screen {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(22, 33, 62, 0.95);
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    z-index: 100;
+}
+
+h1 {
+    font-size: 48px;
+    color: var(--text-color);
+    margin-bottom: 10px;
+    text-shadow: 0 0 10px rgba(233, 69, 96, 0.5);
+}
+
+.subtitle {
+    font-size: 18px;
+    color: #ccc;
+    margin-bottom: 40px;
+}
+
+.input-group {
+    margin-bottom: 30px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+
+.input-group label {
+    margin-bottom: 5px;
+    font-size: 14px;
+    color: #aaa;
+}
+
+.input-group input {
+    padding: 10px;
+    border-radius: 5px;
+    border: none;
+    background-color: #0f3460;
+    color: white;
+    font-size: 16px;
+    text-align: center;
+    width: 200px;
+}
+
+.input-group input:focus {
+    outline: 2px solid var(--text-color);
+}
+
+.role-selection {
+    display: flex;
+    gap: 20px;
+}
+
+.role-btn {
+    background-color: #0f3460;
+    border: 2px solid transparent;
+    border-radius: 10px;
+    padding: 20px;
+    cursor: pointer;
+    transition: all 0.2s;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 10px;
+    color: white;
+    font-size: 16px;
+    width: 150px;
+}
+
+.role-btn:hover {
+    transform: translateY(-5px);
+    background-color: #16213e;
+    border-color: var(--text-color);
+}
+
+.cat-preview {
+    width: 60px;
+    height: 60px;
+    border-radius: 50%;
+    position: relative;
+    margin-bottom: 10px;
+}
+
+.cat-preview .ears { top: -8px; }
+.cat-preview .ears::before, .cat-preview .ears::after { border-bottom-width: 20px; border-left-width: 12px; border-right-width: 12px; }
+
+.boy-preview { background-color: var(--boy-color); }
+.boy-preview .ears::before, .boy-preview .ears::after { border-bottom-color: var(--boy-color); }
+
+.girl-preview { background-color: var(--girl-color); }
+.girl-preview .ears::before, .girl-preview .ears::after { border-bottom-color: var(--girl-color); }

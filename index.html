@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Night Shift Cats</title>
+    <link rel="stylesheet" href="style.css">
+    <!-- Firebase App (the core Firebase SDK) is always required and must be listed first -->
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+    <!-- Add Firebase products that you want to use -->
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
+</head>
+<body>
+
+    <div id="game-container">
+        <!-- The Game World -->
+        <div id="world">
+            <div class="window">
+                <div class="moon"></div>
+                <div class="star" style="top: 10%; left: 20%;"></div>
+                <div class="star" style="top: 30%; left: 70%;"></div>
+                <div class="star" style="top: 60%; left: 40%;"></div>
+            </div>
+            
+            <div class="desk" style="top: 150px; left: 100px;">
+                <div class="monitor"></div>
+                <div class="keyboard"></div>
+            </div>
+
+            <div class="desk" style="top: 150px; right: 100px;">
+                <div class="monitor"></div>
+                <div class="keyboard"></div>
+            </div>
+
+            <div class="plant" style="bottom: 50px; left: 50px;"></div>
+            <div class="coffee-machine" style="top: 50px; right: 50px;"></div>
+
+            <!-- Players will be injected here by JS -->
+        </div>
+
+        <!-- UI Overlay -->
+        <div id="ui-layer">
+            <div id="legend">
+                <p>Move: WASD / Arrow Keys</p>
+            </div>
+            <div id="connection-status" class="hidden">Reconnecting...</div>
+        </div>
+
+        <!-- Start Screen -->
+        <div id="start-screen">
+            <h1>Night Shift Cats</h1>
+            <p class="subtitle">A cozy night at the office</p>
+            
+            <div class="input-group">
+                <label for="nickname">Nickname:</label>
+                <input type="text" id="nickname" placeholder="Enter name" maxlength="10">
+            </div>
+
+            <div class="role-selection">
+                <button class="role-btn boy" onclick="startGame('boy')">
+                    <div class="cat-preview boy-preview">
+                        <div class="ears"></div>
+                        <div class="face"></div>
+                    </div>
+                    I'm the Boy Cat
+                </button>
+                <button class="role-btn girl" onclick="startGame('girl')">
+                    <div class="cat-preview girl-preview">
+                        <div class="ears"></div>
+                        <div class="face"></div>
+                    </div>
+                    I'm the Girl Cat
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Scripts -->
+    <script src="firebase-config.js"></script>
+    <script src="game.js"></script>
+</body>
+</html>
