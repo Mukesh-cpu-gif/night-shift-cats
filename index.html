@@ -5,11 +5,16 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Night Shift Cats</title>
     <link rel="stylesheet" href="style.css">
-    <!-- Firebase App (the core Firebase SDK) is always required and must be listed first -->
-    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
-    <!-- Add Firebase products that you want to use -->
-    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
+
+    <!-- Firebase v8 (works with your game.js) -->
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
+
+    <!-- Your config + game -->
+    <script src="firebase-config.js"></script>
+    <script src="game.js"></script>
 </head>
+
 <body>
 
     <div id="game-container">
@@ -80,3 +85,4 @@
     <script src="game.js"></script>
 </body>
 </html>
+
