@@ -7,33 +7,61 @@ if (!playerId) {
 
 let playerRole = null;
 let playerNickname = "Cat";
-let playerX = 100;
+let playerX = 400;
 let playerY = 300;
+let playerRoom = "office"; // office, study, hangout
 let speed = 4;
 let isGameRunning = false;
 
+// Timer State
+let personalTimerInterval = null;
+let personalTimerEndTime = 0;
+let isNearDesk = false;
+
 // Input State
 const keys = {
-    w: false,
-    a: false,
-    s: false,
-    d: false,
-    ArrowUp: false,
-    ArrowLeft: false,
-    ArrowDown: false,
-    ArrowRight: false
+    w: false, a: false, s: false, d: false,
+    ArrowUp: false, ArrowLeft: false, ArrowDown: false, ArrowRight: false
 };
 
 // Firebase References
 let db;
 let playersRef;
 let myPlayerRef;
+let chatRef;
 
 // DOM Elements
 const startScreen = document.getElementById('start-screen');
 const world = document.getElementById('world');
 const connectionStatus = document.getElementById('connection-status');
 const nicknameInput = document.getElementById('nickname');
+const personalTimerUi = document.getElementById('personal-timer-ui');
+const timerDisplay = document.getElementById('timer-display');
+const timerControls = document.getElementById('timer-controls');
+const stopBtn = document.getElementById('stop-btn');
+const chatUi = document.getElementById('chat-ui');
+const chatMessages = document.getElementById('chat-messages');
+const chatInput = document.getElementById('chat-input');
+
+// Clock Hands
+const hourHand = document.querySelector('.hand.hour');
+const minuteHand = document.querySelector('.hand.minute');
+const secondHand = document.querySelector('.hand.second');
+
+// Rooms
+const rooms = {
+    office: document.getElementById('room-office'),
+    study: document.getElementById('room-study'),
+    hangout: document.getElementById('room-hangout')
+};
+
+// Desk Zones (Study Room)
+const deskZones = [
+    { x: 160, y: 130 }, // Top Left
+    { x: 640, y: 130 }, // Top Right
+    { x: 160, y: 330 }, // Bottom Left
+    { x: 640, y: 330 }  // Bottom Right
+];
 
 // Initialize Game
 function startGame(role) {
@@ -41,72 +69,93 @@ function startGame(role) {
     if (name) playerNickname = name;
     playerRole = role;
 
-    // Hide Start Screen
     startScreen.style.display = 'none';
     isGameRunning = true;
 
     // Initialize Firebase
-    if (typeof firebase !== 'undefined' && typeof firebaseConfig !== 'undefined') {
+    if (typeof firebase !== 'undefined') {
         try {
-            if (!firebase.apps.length) {
+            if (!firebase.apps.length && typeof firebaseConfig !== 'undefined') {
                 firebase.initializeApp(firebaseConfig);
             }
+
             db = firebase.database();
             playersRef = db.ref('rooms/default/players');
             myPlayerRef = playersRef.child(playerId);
+            chatRef = db.ref('rooms/default/chat');
 
-            // Set initial position
             updateMyPosition();
-
-            // Remove player on disconnect
             myPlayerRef.onDisconnect().remove();
-
-            // Listen for other players
             setupPlayerListeners();
+            setupChatListener();
 
-            // Connection monitoring
-            const connectedRef = db.ref('.info/connected');
-            connectedRef.on('value', (snap) => {
-                if (snap.val() === true) {
-                    connectionStatus.classList.add('hidden');
-                } else {
-                    connectionStatus.classList.remove('hidden');
-                }
+            db.ref('.info/connected').on('value', (snap) => {
+                if (snap.val() === true) connectionStatus.classList.add('hidden');
+                else connectionStatus.classList.remove('hidden');
             });
 
         } catch (e) {
-            console.error("Firebase initialization failed:", e);
-            alert("Firebase config is missing or invalid. Check the console.");
+            console.error("Firebase error:", e);
+            alert("Firebase error. Check console.");
         }
-    } else {
-        console.warn("Firebase SDK not loaded or config missing. Running in offline mode.");
     }
 
-    // Start Game Loop
+    // Start Clock
+    setInterval(updateClock, 1000);
+    updateClock();
+
     requestAnimationFrame(gameLoop);
 }
 
 // Input Listeners
 window.addEventListener('keydown', (e) => {
     if (keys.hasOwnProperty(e.key)) keys[e.key] = true;
+    if (e.key === 'Enter' && playerRoom === 'hangout') sendChat();
 });
 
 window.addEventListener('keyup', (e) => {
     if (keys.hasOwnProperty(e.key)) keys[e.key] = false;
 });
 
+// Mobile Controls
+const btnUp = document.getElementById('btn-up');
+const btnDown = document.getElementById('btn-down');
+const btnLeft = document.getElementById('btn-left');
+const btnRight = document.getElementById('btn-right');
+
+function setupMobileBtn(btn, key) {
+    const start = (e) => { e.preventDefault(); keys[key] = true; };
+    const end = (e) => { e.preventDefault(); keys[key] = false; };
+
+    btn.addEventListener('touchstart', start);
+    btn.addEventListener('touchend', end);
+    btn.addEventListener('mousedown', start); // For desktop testing
+    btn.addEventListener('mouseup', end);
+    btn.addEventListener('mouseleave', end);
+}
+
+if (btnUp) {
+    setupMobileBtn(btnUp, 'ArrowUp');
+    setupMobileBtn(btnDown, 'ArrowDown');
+    setupMobileBtn(btnLeft, 'ArrowLeft');
+    setupMobileBtn(btnRight, 'ArrowRight');
+}
+
 // Game Loop
 function gameLoop() {
     if (!isGameRunning) return;
 
     handleMovement();
-    renderMyPlayer(); // In a real networked game, we might wait for server ack, but for responsiveness we predict locally
+    checkRoomTransitions();
+    checkDeskProximity();
+    renderMyPlayer();
 
-    // Throttle network updates
     if (Date.now() - lastNetworkUpdate > 100) {
         updateMyPosition();
         lastNetworkUpdate = Date.now();
     }
+
+    updatePersonalTimer();
 
     requestAnimationFrame(gameLoop);
 }
@@ -114,6 +163,8 @@ function gameLoop() {
 let lastNetworkUpdate = 0;
 
 function handleMovement() {
+    if (document.activeElement === chatInput) return;
+
     let dx = 0;
     let dy = 0;
 
@@ -122,7 +173,6 @@ function handleMovement() {
     if (keys.a || keys.ArrowLeft) dx -= speed;
     if (keys.d || keys.ArrowRight) dx += speed;
 
-    // Normalize diagonal movement
     if (dx !== 0 && dy !== 0) {
         dx *= 0.707;
         dy *= 0.707;
@@ -131,49 +181,109 @@ function handleMovement() {
     playerX += dx;
     playerY += dy;
 
-    // Bounds checking (800x600 world, 40x40 player)
+    // Bounds checking
     if (playerX < 0) playerX = 0;
     if (playerY < 0) playerY = 0;
-    if (playerX > 760) playerX = 760; // 800 - 40
-    if (playerY > 560) playerY = 560; // 600 - 40
+    if (playerX > 760) playerX = 760;
+    if (playerY > 560) playerY = 560;
+}
+
+function checkRoomTransitions() {
+    // Office -> Study
+    if (playerRoom === 'office' && playerX < 10 && playerY > 200 && playerY < 300) {
+        switchRoom('study', 380, 450);
+    }
+    // Office -> Hangout
+    else if (playerRoom === 'office' && playerX > 750 && playerY > 200 && playerY < 300) {
+        switchRoom('hangout', 380, 450);
+    }
+    // Study -> Office
+    else if (playerRoom === 'study' && playerY > 550 && playerX > 350 && playerX < 450) {
+        switchRoom('office', 50, 250);
+    }
+    // Hangout -> Office
+    else if (playerRoom === 'hangout' && playerY > 550 && playerX > 350 && playerX < 450) {
+        switchRoom('office', 700, 250);
+    }
+}
+
+function switchRoom(newRoom, newX, newY) {
+    playerRoom = newRoom;
+    playerX = newX;
+    playerY = newY;
+
+    Object.values(rooms).forEach(el => el.classList.add('hidden'));
+    rooms[newRoom].classList.remove('hidden');
+
+    if (newRoom === 'hangout') chatUi.classList.remove('hidden');
+    else chatUi.classList.add('hidden');
+
+    // Hide timer UI when leaving study room, unless running (but hide controls)
+    if (newRoom !== 'study') {
+        personalTimerUi.classList.add('hidden');
+    }
+
+    refreshPlayerVisibility();
+}
+
+function checkDeskProximity() {
+    if (playerRoom !== 'study') {
+        isNearDesk = false;
+        return;
+    }
+
+    let near = false;
+    for (const zone of deskZones) {
+        const dist = Math.sqrt(Math.pow(playerX - zone.x, 2) + Math.pow(playerY - zone.y, 2));
+        if (dist < 60) {
+            near = true;
+            break;
+        }
+    }
+
+    isNearDesk = near;
+
+    // Show UI if near desk OR timer is running
+    if (isNearDesk || personalTimerInterval) {
+        personalTimerUi.classList.remove('hidden');
+
+        // If timer running, show stop button, hide start controls
+        if (personalTimerInterval) {
+            timerControls.classList.add('hidden');
+            stopBtn.classList.remove('hidden');
+        } else {
+            // If just near desk and no timer, show start controls
+            timerControls.classList.remove('hidden');
+            stopBtn.classList.add('hidden');
+        }
+    } else {
+        personalTimerUi.classList.add('hidden');
+    }
 }
 
 function updateMyPosition() {
     if (!myPlayerRef) return;
-
     myPlayerRef.set({
         x: playerX,
         y: playerY,
         nickname: playerNickname,
         role: playerRole,
+        room: playerRoom,
         lastUpdated: firebase.database.ServerValue.TIMESTAMP
     });
 }
 
 // Rendering
-const players = {}; // Local cache of player DOM elements
+const players = {};
 
 function setupPlayerListeners() {
-    playersRef.on('child_added', (snapshot) => {
-        const data = snapshot.val();
-        const id = snapshot.key;
-        createPlayerElement(id, data);
-    });
-
-    playersRef.on('child_changed', (snapshot) => {
-        const data = snapshot.val();
-        const id = snapshot.key;
-        updatePlayerElement(id, data);
-    });
-
-    playersRef.on('child_removed', (snapshot) => {
-        const id = snapshot.key;
-        removePlayerElement(id);
-    });
+    playersRef.on('child_added', (snapshot) => createPlayerElement(snapshot.key, snapshot.val()));
+    playersRef.on('child_changed', (snapshot) => updatePlayerElement(snapshot.key, snapshot.val()));
+    playersRef.on('child_removed', (snapshot) => removePlayerElement(snapshot.key));
 }
 
 function createPlayerElement(id, data) {
-    if (players[id]) return; // Already exists
+    if (players[id]) return;
 
     const el = document.createElement('div');
     el.className = `player ${data.role}`;
@@ -185,55 +295,130 @@ function createPlayerElement(id, data) {
     `;
 
     world.appendChild(el);
-    players[id] = el;
+    players[id] = { el, data };
     updatePlayerElement(id, data);
 }
 
 function updatePlayerElement(id, data) {
-    const el = players[id];
-    if (!el) return;
+    const p = players[id];
+    if (!p) return;
+    p.data = data;
 
-    // If it's me, I might want to skip this if I'm predicting locally, 
-    // but for simplicity let's just update everyone or handle "me" separately.
-    // Actually, let's update "me" only from local state to avoid jitter, 
-    // and everyone else from network.
-    if (id === playerId) {
-        // We handle our own rendering in renderMyPlayer()
-        return;
-    }
+    if (id === playerId) return;
 
-    el.style.transform = `translate(${data.x}px, ${data.y}px)`;
+    if (data.room === playerRoom) {
+        p.el.style.display = 'block';
+        p.el.style.transform = `translate(${data.x}px, ${data.y}px)`;
 
-    // Update role/name if changed (rare but possible)
-    if (!el.classList.contains(data.role)) {
-        el.className = `player ${data.role}`;
-    }
-    const nickEl = el.querySelector('.nickname');
-    if (nickEl.innerText !== data.nickname) {
-        nickEl.innerText = data.nickname;
+        if (!p.el.classList.contains(data.role)) p.el.className = `player ${data.role}`;
+        const nickEl = p.el.querySelector('.nickname');
+        if (nickEl.innerText !== data.nickname) nickEl.innerText = data.nickname;
+    } else {
+        p.el.style.display = 'none';
     }
 }
 
 function removePlayerElement(id) {
     if (players[id]) {
-        players[id].remove();
+        players[id].el.remove();
         delete players[id];
     }
 }
 
 function renderMyPlayer() {
-    // Ensure my player element exists
     if (!players[playerId]) {
-        createPlayerElement(playerId, {
-            x: playerX,
-            y: playerY,
-            nickname: playerNickname,
-            role: playerRole
-        });
+        createPlayerElement(playerId, { x: playerX, y: playerY, nickname: playerNickname, role: playerRole, room: playerRoom });
+    }
+    const p = players[playerId];
+    if (p) {
+        p.el.style.transform = `translate(${playerX}px, ${playerY}px)`;
+        p.el.style.display = 'block';
+    }
+}
+
+function refreshPlayerVisibility() {
+    Object.keys(players).forEach(id => {
+        if (id !== playerId) updatePlayerElement(id, players[id].data);
+    });
+}
+
+// Personal Timer Logic
+function startPersonalTimer(minutes) {
+    personalTimerEndTime = Date.now() + minutes * 60000;
+    if (personalTimerInterval) clearInterval(personalTimerInterval);
+    updatePersonalTimer();
+    personalTimerInterval = setInterval(updatePersonalTimer, 1000);
+
+    // Update UI immediately
+    timerControls.classList.add('hidden');
+    stopBtn.classList.remove('hidden');
+}
+
+function stopPersonalTimer() {
+    if (personalTimerInterval) clearInterval(personalTimerInterval);
+    personalTimerInterval = null;
+    timerDisplay.innerText = "25:00";
+
+    // Update UI
+    timerControls.classList.remove('hidden');
+    stopBtn.classList.add('hidden');
+}
+
+function updatePersonalTimer() {
+    if (!personalTimerInterval) return;
+
+    const remaining = personalTimerEndTime - Date.now();
+    if (remaining <= 0) {
+        stopPersonalTimer();
+        timerDisplay.innerText = "00:00";
+        alert("Focus session complete!");
+        return;
     }
 
-    const el = players[playerId];
-    if (el) {
-        el.style.transform = `translate(${playerX}px, ${playerY}px)`;
-    }
+    const m = Math.floor(remaining / 60000);
+    const s = Math.floor((remaining % 60000) / 1000);
+    timerDisplay.innerText = `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+}
+
+// Analog Clock Logic
+function updateClock() {
+    if (playerRoom !== 'study') return; // Optimization
+
+    const now = new Date();
+    const seconds = now.getSeconds();
+    const minutes = now.getMinutes();
+    const hours = now.getHours();
+
+    const secondDegrees = ((seconds / 60) * 360);
+    const minuteDegrees = ((minutes / 60) * 360) + ((seconds / 60) * 6);
+    const hourDegrees = ((hours / 12) * 360) + ((minutes / 60) * 30);
+
+    if (secondHand) secondHand.style.transform = `translateX(-50%) rotate(${secondDegrees}deg)`;
+    if (minuteHand) minuteHand.style.transform = `translateX(-50%) rotate(${minuteDegrees}deg)`;
+    if (hourHand) hourHand.style.transform = `translateX(-50%) rotate(${hourDegrees}deg)`;
+}
+
+// Chat Logic
+function setupChatListener() {
+    chatRef.limitToLast(20).on('child_added', (snapshot) => {
+        const msg = snapshot.val();
+        const div = document.createElement('div');
+        div.className = 'chat-msg';
+        div.innerHTML = `<span class="sender">${msg.sender}:</span> ${msg.text}`;
+        chatMessages.appendChild(div);
+        chatMessages.scrollTop = chatMessages.scrollHeight;
+    });
+}
+
+function sendChat() {
+    const text = chatInput.value.trim();
+    if (!text) return;
+
+    chatRef.push({
+        sender: playerNickname,
+        text: text,
+        timestamp: firebase.database.ServerValue.TIMESTAMP
+    });
+
+    chatInput.value = '';
 }

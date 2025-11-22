@@ -16,25 +16,105 @@
     <div id="game-container">
         <!-- The Game World -->
         <div id="world">
-            <div class="window">
-                <div class="moon"></div>
-                <div class="star" style="top: 10%; left: 20%;"></div>
-                <div class="star" style="top: 30%; left: 70%;"></div>
-                <div class="star" style="top: 60%; left: 40%;"></div>
-            </div>
-            
-            <div class="desk" style="top: 150px; left: 100px;">
-                <div class="monitor"></div>
-                <div class="keyboard"></div>
+            <!-- Office Room -->
+            <div id="room-office" class="room">
+                <div class="window">
+                    <div class="moon"></div>
+                    <div class="star" style="top: 10%; left: 20%;"></div>
+                    <div class="star" style="top: 30%; left: 70%;"></div>
+                    <div class="star" style="top: 60%; left: 40%;"></div>
+                </div>
+                
+                <div class="desk" style="top: 150px; left: 100px;">
+                    <div class="monitor"></div>
+                    <div class="keyboard"></div>
+                </div>
+
+                <div class="desk" style="top: 150px; right: 100px;">
+                    <div class="monitor"></div>
+                    <div class="keyboard"></div>
+                </div>
+
+                <div class="plant" style="bottom: 50px; left: 50px;"></div>
+                <div class="coffee-machine" style="top: 50px; right: 50px;"></div>
+
+                <!-- Doors -->
+                <div class="door to-study" style="top: 250px; left: 0;">
+                    <span>Study</span>
+                </div>
+                <div class="door to-hangout" style="top: 250px; right: 0;">
+                    <span>Hangout</span>
+                </div>
             </div>
 
-            <div class="desk" style="top: 150px; right: 100px;">
-                <div class="monitor"></div>
-                <div class="keyboard"></div>
+            <!-- Study Room -->
+            <div id="room-study" class="room hidden">
+                <div class="analog-clock" style="top: 30px; left: 50%; transform: translateX(-50%);">
+                    <div class="hand hour"></div>
+                    <div class="hand minute"></div>
+                    <div class="hand second"></div>
+                    <div class="center-dot"></div>
+                </div>
+
+                <!-- Desk 1 (Top Left) -->
+                <div class="study-desk" style="top: 100px; left: 100px;">
+                    <div class="computer"></div>
+                    <div class="notes"></div>
+                </div>
+                <!-- Desk 2 (Top Right) -->
+                <div class="study-desk" style="top: 100px; right: 100px;">
+                    <div class="computer"></div>
+                    <div class="notes"></div>
+                </div>
+                <!-- Desk 3 (Bottom Left) -->
+                <div class="study-desk" style="top: 300px; left: 100px;">
+                    <div class="computer"></div>
+                    <div class="notes"></div>
+                </div>
+                <!-- Desk 4 (Bottom Right) -->
+                <div class="study-desk" style="top: 300px; right: 100px;">
+                    <div class="computer"></div>
+                    <div class="notes"></div>
+                </div>
+                
+                <div class="door to-office" style="top: 500px; left: 50%; transform: translateX(-50%);">
+                    <span>Back to Office</span>
+                </div>
             </div>
 
-            <div class="plant" style="bottom: 50px; left: 50px;"></div>
-            <div class="coffee-machine" style="top: 50px; right: 50px;"></div>
+            <!-- Hangout Room (Blueberry Restaurant) -->
+            <div id="room-hangout" class="room hidden">
+                <!-- Shop Counter -->
+                <div class="blueberry-shop" style="top: 50px; left: 50%; transform: translateX(-50%);">
+                    <div class="shop-sign">Blueberry</div>
+                    <div class="counter"></div>
+                </div>
+
+                <!-- Table 1 -->
+                <div class="dining-table" style="top: 200px; left: 150px;">
+                    <div class="chair" style="top: -20px; left: 50%; transform: translateX(-50%);"></div>
+                    <div class="chair" style="bottom: -20px; left: 50%; transform: translateX(-50%);"></div>
+                    <div class="plate"></div>
+                </div>
+
+                <!-- Table 2 -->
+                <div class="dining-table" style="top: 200px; right: 150px;">
+                    <div class="chair" style="top: -20px; left: 50%; transform: translateX(-50%);"></div>
+                    <div class="chair" style="bottom: -20px; left: 50%; transform: translateX(-50%);"></div>
+                    <div class="plate"></div>
+                </div>
+
+                <!-- Table 3 -->
+                <div class="dining-table" style="top: 350px; left: 50%; transform: translateX(-50%);">
+                    <div class="chair" style="left: -20px; top: 50%; transform: translateY(-50%);"></div>
+                    <div class="chair" style="right: -20px; top: 50%; transform: translateY(-50%);"></div>
+                    <div class="plate"></div>
+                </div>
+                
+                <div class="door to-office" style="top: 500px; left: 50%; transform: translateX(-50%);">
+                    <span>Back to Office</span>
+                </div>
+            </div>
 
             <!-- Players will be injected here by JS -->
         </div>
@@ -45,6 +125,36 @@
                 <p>Move: WASD / Arrow Keys</p>
             </div>
             <div id="connection-status" class="hidden">Reconnecting...</div>
+            
+            <!-- Personal Timer UI (Study Room) -->
+            <div id="personal-timer-ui" class="hidden">
+                <div id="timer-display">25:00</div>
+                <div id="timer-controls">
+                    <button onclick="startPersonalTimer(25)">Start (25m)</button>
+                </div>
+                <button onclick="stopPersonalTimer()" id="stop-btn" class="hidden">Stop</button>
+            </div>
+
+            <!-- Chat UI (Hangout Room) -->
+            <div id="chat-ui" class="hidden">
+                <div id="chat-messages"></div>
+                <div id="chat-input-area">
+                    <input type="text" id="chat-input" placeholder="Say something..." maxlength="50">
+                    <button onclick="sendChat()">Send</button>
+                </div>
+            </div>
+
+            <!-- Mobile Controls -->
+            <div id="mobile-controls">
+                <div class="d-pad">
+                    <button id="btn-up" class="d-btn">▲</button>
+                    <div class="d-row">
+                        <button id="btn-left" class="d-btn">◀</button>
+                        <button id="btn-down" class="d-btn">▼</button>
+                        <button id="btn-right" class="d-btn">▶</button>
+                    </div>
+                </div>
+            </div>
         </div>
 
         <!-- Start Screen -->
@@ -81,5 +191,3 @@
     <script src="game.js"></script>
 </body>
 </html>
-
-
