@@ -39,11 +39,17 @@
                 <div class="coffee-machine" style="top: 50px; right: 50px;"></div>
 
                 <!-- Doors -->
-                <div class="door to-study" style="top: 250px; left: 0;">
-                    <span>Study</span>
+                <div class="door to-study" style="top: 240px; left: 10px;">
+                    <span>📚 Study</span>
                 </div>
-                <div class="door to-hangout" style="top: 250px; right: 0;">
-                    <span>Hangout</span>
+                <div class="door to-hangout" style="top: 240px; right: 10px;">
+                    <span>🫐 Hangout</span>
+                </div>
+                <div class="door to-matchi" style="top: 10px; left: 50%; transform: translateX(-50%);">
+                    <span>🎵 Matchi</span>
+                </div>
+                <div class="door to-skyview" style="bottom: 10px; right: 10px;">
+                    <span>✨ Skyview</span>
                 </div>
             </div>
 
@@ -116,6 +122,102 @@
                 </div>
             </div>
 
+            <!-- Matchi Room -->
+            <div id="room-matchi" class="room hidden">
+                <!-- Phonograph on left desk -->
+                <div class="phonograph-desk" style="top: 200px; left: 100px;">
+                    <div class="phonograph">
+                        <div class="phonograph-base"></div>
+                        <div class="vinyl-disc" id="vinyl-disc">
+                            <div class="vinyl-label"></div>
+                        </div>
+                        <div class="tonearm"></div>
+                    </div>
+                </div>
+
+                <!-- Music Player (moved from global UI) -->
+                <div id="music-player-matchi">
+                    <button id="music-toggle" onclick="toggleMusic()">🎵 Play Lofi</button>
+                    <audio id="bg-music" loop>
+                        <source src="https://cdn.pixabay.com/download/audio/2022/05/27/audio_1808fbf07a.mp3?filename=lofi-study-112191.mp3" type="audio/mpeg">
+                        Your browser does not support the audio element.
+                    </audio>
+                </div>
+                
+                <!-- Disco Ball (top center) -->
+                <div class="disco-ball" id="disco-ball" style="top: 30px; left: 50%; transform: translateX(-50%);">
+                    <div class="disco-facet"></div>
+                    <div class="disco-facet"></div>
+                    <div class="disco-facet"></div>
+                    <div class="disco-facet"></div>
+                </div>
+
+                <!-- Lava Lamp (right side) -->
+                <div class="lava-lamp" style="top: 150px; right: 100px;">
+                    <div class="lava-blob blob1"></div>
+                    <div class="lava-blob blob2"></div>
+                    <div class="lava-blob blob3"></div>
+                </div>
+
+                <!-- Neon Signs -->
+                <div class="neon-sign" style="top: 100px; left: 50px;">
+                    <span class="neon-text">VIBES</span>
+                </div>
+                <div class="neon-sign" style="top: 100px; right: 50px;">
+                    <span class="neon-text pink">CHILL</span>
+                </div>
+                
+                <div class="door to-office" style="bottom: 20px; left: 50%; transform: translateX(-50%);">
+                    <span>Back to Office</span>
+                </div>
+            </div>
+
+            <!-- Skyview Room -->
+            <div id="room-skyview" class="room hidden">
+                <!-- Star field container -->
+                <div class="star-field">
+                    <!-- Generate stars via CSS -->
+                </div>
+
+                <!-- Shooting stars -->
+                <div class="shooting-star" style="top: 20%; left: 10%;"></div>
+                <div class="shooting-star" style="top: 40%; left: 60%; animation-delay: 3s;"></div>
+                <div class="shooting-star" style="top: 70%; left: 30%; animation-delay: 6s;"></div>
+
+                <!-- Telescope -->
+                <div class="telescope" style="bottom: 50px; right: 100px;">
+                    <div class="telescope-body"></div>
+                    <div class="telescope-lens"></div>
+                    <div class="telescope-tripod"></div>
+                </div>
+
+                <!-- Moon -->
+                <div class="large-moon"></div>
+
+                <!-- Constellation lines (Big Dipper) -->
+                <div class="constellation" style="top: 100px; left: 200px;">
+                    <div class="star-point" style="top: 0; left: 0;"></div>
+                    <div class="star-point" style="top: 10px; left: 30px;"></div>
+                    <div class="star-point" style="top: 5px; left: 60px;"></div>
+                    <div class="star-point" style="top: 20px; left: 90px;"></div>
+                    <div class="star-point" style="top: 50px; left: 80px;"></div>
+                    <div class="star-point" style="top: 70px; left: 70px;"></div>
+                    <div class="star-point" style="top: 90px; left: 50px;"></div>
+                    <svg class="constellation-lines">
+                        <line x1="5" y1="5" x2="35" y2="15" stroke="rgba(255,255,255,0.3)" stroke-width="1"/>
+                        <line x1="35" y1="15" x2="65" y2="10" stroke="rgba(255,255,255,0.3)" stroke-width="1"/>
+                        <line x1="65" y1="10" x2="95" y2="25" stroke="rgba(255,255,255,0.3)" stroke-width="1"/>
+                        <line x1="95" y1="25" x2="85" y2="55" stroke="rgba(255,255,255,0.3)" stroke-width="1"/>
+                        <line x1="85" y1="55" x2="75" y2="75" stroke="rgba(255,255,255,0.3)" stroke-width="1"/>
+                        <line x1="75" y1="75" x2="55" y2="95" stroke="rgba(255,255,255,0.3)" stroke-width="1"/>
+                    </svg>
+                </div>
+                
+                <div class="door to-office" style="bottom: 20px; left: 50%; transform: translateX(-50%);">
+                    <span>Back to Office</span>
+                </div>
+            </div>
+
             <!-- Players will be injected here by JS -->
         </div>
 
@@ -156,14 +258,7 @@
                 </div>
             </div>
 
-            <!-- Music Player -->
-            <div id="music-player">
-                <button id="music-toggle" onclick="toggleMusic()">🎵 Play Lofi</button>
-                <audio id="bg-music" loop>
-                    <source src="https://cdn.pixabay.com/download/audio/2022/05/27/audio_1808fbf07a.mp3?filename=lofi-study-112191.mp3" type="audio/mpeg">
-                    Your browser does not support the audio element.
-                </audio>
-            </div>
+
         </div>
 
         <!-- Start Screen -->

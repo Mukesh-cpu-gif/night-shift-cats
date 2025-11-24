@@ -52,7 +52,9 @@ const secondHand = document.querySelector('.hand.second');
 const rooms = {
     office: document.getElementById('room-office'),
     study: document.getElementById('room-study'),
-    hangout: document.getElementById('room-hangout')
+    hangout: document.getElementById('room-hangout'),
+    matchi: document.getElementById('room-matchi'),
+    skyview: document.getElementById('room-skyview')
 };
 
 // Desk Zones (Study Room)
@@ -146,14 +148,17 @@ if (btnUp) {
 // Music Logic
 const bgMusic = document.getElementById('bg-music');
 const musicBtn = document.getElementById('music-toggle');
+const vinylDisc = document.getElementById('vinyl-disc');
 
 function toggleMusic() {
     if (bgMusic.paused) {
         bgMusic.play().catch(e => console.log("Audio play failed:", e));
         musicBtn.innerText = "🎵 Pause Music";
+        if (vinylDisc) vinylDisc.classList.add('spinning');
     } else {
         bgMusic.pause();
         musicBtn.innerText = "🎵 Play Lofi";
+        if (vinylDisc) vinylDisc.classList.remove('spinning');
     }
 }
 
@@ -232,21 +237,37 @@ function gameLoop() {
 }
 
 function checkRoomTransitions() {
-    // Office -> Study
-    if (playerRoom === 'office' && playerX < 10 && playerY > 200 && playerY < 300) {
+    // Office -> Study (left door)
+    if (playerRoom === 'office' && playerX < 20 && playerY > 220 && playerY < 360) {
         switchRoom('study', 380, 450);
     }
-    // Office -> Hangout
-    else if (playerRoom === 'office' && playerX > 750 && playerY > 200 && playerY < 300) {
+    // Office -> Hangout (right door)
+    else if (playerRoom === 'office' && playerX > 710 && playerY > 220 && playerY < 360) {
         switchRoom('hangout', 380, 450);
+    }
+    // Office -> Matchi (top door)
+    else if (playerRoom === 'office' && playerY < 20 && playerX > 320 && playerX < 480) {
+        switchRoom('matchi', 400, 550);
+    }
+    // Office -> Skyview (bottom-right door)
+    else if (playerRoom === 'office' && playerY > 470 && playerX > 630 && playerX < 790) {
+        switchRoom('skyview', 400, 50);
     }
     // Study -> Office
     else if (playerRoom === 'study' && playerY > 550 && playerX > 350 && playerX < 450) {
-        switchRoom('office', 50, 250);
+        switchRoom('office', 90, 280);
     }
     // Hangout -> Office
     else if (playerRoom === 'hangout' && playerY > 550 && playerX > 350 && playerX < 450) {
-        switchRoom('office', 700, 250);
+        switchRoom('office', 650, 280);
+    }
+    // Matchi -> Office (bottom door)
+    else if (playerRoom === 'matchi' && playerY > 550 && playerX > 350 && playerX < 450) {
+        switchRoom('office', 400, 90);
+    }
+    // Skyview -> Office (bottom center door)
+    else if (playerRoom === 'skyview' && playerY > 460 && playerX > 300 && playerX < 500) {
+        switchRoom('office', 650, 400);
     }
 }
 
