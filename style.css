@@ -17,7 +17,7 @@
 }
 
 body {
-    background-color: #000;
+    background-color: var(--floor-color);
     display: flex;
     justify-content: center;
     align-items: center;
@@ -28,11 +28,9 @@ body {
 
 #game-container {
     position: relative;
-    width: 800px;
-    height: 600px;
+    width: 100vw;
+    height: 100vh;
     background-color: var(--floor-color);
-    border-radius: 10px;
-    box-shadow: 0 0 20px rgba(0,0,0,0.5);
     overflow: hidden;
 }
 
@@ -377,19 +375,19 @@ h1 {
 /* Doors */
 .door {
     position: absolute;
-    width: 80px;
-    height: 120px;
+    width: 60px;
+    height: 100px;
     background: linear-gradient(135deg, #6d4c41 0%, #4e342e 50%, #3e2723 100%);
-    border-radius: 8px 8px 0 0;
-    border: 3px solid #5d4037;
+    border-radius: 6px 6px 0 0;
+    border: 2px solid #5d4037;
     display: flex;
     justify-content: center;
     align-items: center;
     cursor: pointer;
     box-shadow: 
-        0 4px 8px rgba(0,0,0,0.4),
-        inset 0 2px 4px rgba(255,255,255,0.1),
-        inset 0 -2px 4px rgba(0,0,0,0.3);
+        0 3px 6px rgba(0,0,0,0.4),
+        inset 0 1px 3px rgba(255,255,255,0.1),
+        inset 0 -1px 3px rgba(0,0,0,0.3);
     transition: all 0.3s;
 }
 
@@ -548,6 +546,204 @@ h1 {
     box-shadow: 0 4px 0 #ccc, 0 8px 0 #ccc;
 }
 
+/* Bookshelves */
+.bookshelf {
+    position: absolute;
+    width: 50px;
+    height: 150px;
+    background: linear-gradient(180deg, #4e342e 0%, #3e2723 100%);
+    border: 2px solid #5d4037;
+    border-radius: 4px;
+    box-shadow: 2px 2px 6px rgba(0,0,0,0.3);
+}
+
+.bookshelf::before {
+    content: '';
+    position: absolute;
+    top: 10px;
+    left: 5px;
+    right: 5px;
+    height: 40px;
+    background: repeating-linear-gradient(
+        90deg,
+        #d32f2f 0px,
+        #d32f2f 8px,
+        #1976d2 8px,
+        #1976d2 16px,
+        #388e3c 16px,
+        #388e3c 24px,
+        #f57c00 24px,
+        #f57c00 32px,
+        #7b1fa2 32px,
+        #7b1fa2 40px
+    );
+    border-radius: 2px;
+}
+
+.bookshelf::after {
+    content: '';
+    position: absolute;
+    top: 60px;
+    left: 5px;
+    right: 5px;
+    height: 35px;
+    background: repeating-linear-gradient(
+        90deg,
+        #0288d1 0px,
+        #0288d1 10px,
+        #c2185b 10px,
+        #c2185b 18px,
+        #689f38 18px,
+        #689f38 28px,
+        #fbc02d 28px,
+        #fbc02d 40px
+    );
+    border-radius: 2px;
+}
+
+/* Study Plants */
+.study-plant {
+    position: absolute;
+    width: 40px;
+    height: 60px;
+}
+
+.study-plant::before {
+    content: '';
+    position: absolute;
+    bottom: 0;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 30px;
+    height: 20px;
+    background: #8d6e63;
+    border-radius: 0 0 8px 8px;
+    box-shadow: inset 0 -2px 4px rgba(0,0,0,0.3);
+}
+
+.study-plant::after {
+    content: '🌿';
+    position: absolute;
+    top: 0;
+    left: 50%;
+    transform: translateX(-50%);
+    font-size: 35px;
+    animation: plant-sway 3s ease-in-out infinite;
+}
+
+@keyframes plant-sway {
+    0%, 100% { transform: translateX(-50%) rotate(-5deg); }
+    50% { transform: translateX(-50%) rotate(5deg); }
+}
+
+/* Coffee Station */
+.coffee-station {
+    position: absolute;
+    width: 100px;
+    height: 60px;
+    background: rgba(93,64,55,0.3);
+    border-radius: 8px;
+    padding: 10px;
+}
+
+.coffee-maker {
+    position: absolute;
+    top: 15px;
+    left: 15px;
+    width: 30px;
+    height: 35px;
+    background: linear-gradient(180deg, #424242 0%, #212121 100%);
+    border-radius: 4px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.3);
+}
+
+.coffee-maker::before {
+    content: '';
+    position: absolute;
+    top: 5px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 20px;
+    height: 15px;
+    background: #1976d2;
+    border-radius: 2px;
+    opacity: 0.6;
+}
+
+.coffee-maker::after {
+    content: '';
+    position: absolute;
+    bottom: -5px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 15px;
+    height: 8px;
+    background: #6d4c41;
+    border-radius: 0 0 50% 50%;
+}
+
+.coffee-mug {
+    position: absolute;
+    top: 25px;
+    right: 15px;
+    width: 20px;
+    height: 25px;
+    background: linear-gradient(180deg, #fff 0%, #e0e0e0 100%);
+    border-radius: 0 0 8px 8px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+}
+
+.coffee-mug::before {
+    content: '';
+    position: absolute;
+    right: -8px;
+    top: 8px;
+    width: 10px;
+    height: 12px;
+    border: 2px solid #e0e0e0;
+    border-left: none;
+    border-radius: 0 50% 50% 0;
+}
+
+.coffee-mug::after {
+    content: '';
+    position: absolute;
+    top: 2px;
+    left: 2px;
+    right: 2px;
+    height: 8px;
+    background: #6d4c41;
+    border-radius: 2px;
+    animation: coffee-steam 2s ease-in-out infinite;
+}
+
+@keyframes coffee-steam {
+    0%, 100% { opacity: 0.6; }
+    50% { opacity: 0.9; }
+}
+
+/* Motivational Poster */
+.poster {
+    position: absolute;
+    width: 120px;
+    height: 80px;
+    background: linear-gradient(135deg, #fff 0%, #f5f5f5 100%);
+    border: 4px solid #424242;
+    border-radius: 4px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 4px 8px rgba(0,0,0,0.3);
+}
+
+.poster span {
+    font-size: 16px;
+    font-weight: bold;
+    color: #1976d2;
+    text-shadow: 0 0 10px rgba(25,118,210,0.3);
+}
+
+
 /* Analog Clock */
 .analog-clock {
     position: absolute;
@@ -632,49 +828,6 @@ h1 {
 }
 
 .chair {
-    position: absolute;
-    width: 30px;
-    height: 30px;
-    background-color: #303f9f;
-    border-radius: 50%;
-    border: 2px solid #1a237e;
-}
-
-.plate {
-    position: absolute;
-    top: 50%; left: 50%;
-    transform: translate(-50%, -50%);
-    width: 20px; height: 20px;
-    background-color: #fff;
-    border-radius: 50%;
-    box-shadow: 0 2px 2px rgba(0,0,0,0.2);
-}
-
-.plate::after {
-    content: '';
-    position: absolute;
-    top: 5px; left: 5px; width: 10px; height: 10px;
-    background-color: #3949ab; /* Blueberry on plate */
-    border-radius: 50%;
-}
-
-/* Personal Timer UI */
-#personal-timer-ui {
-    position: absolute;
-    top: 20px;
-    left: 50%;
-    transform: translateX(-50%);
-    background-color: rgba(0, 0, 0, 0.9);
-    padding: 10px 20px;
-    border-radius: 20px;
-    text-align: center;
-    border: 2px solid #4361ee;
-    pointer-events: auto;
-    min-width: 150px;
-}
-
-#timer-display {
-    font-size: 20px;
     font-weight: bold;
     color: #4361ee;
     margin-bottom: 5px;
@@ -1144,219 +1297,187 @@ h1 {
 }
 
 
-/* Skyview Room */
+/* Maze Game Room (formerly Skyview) */
 #room-skyview {
-    background: radial-gradient(ellipse at bottom, #1B2735 0%, #090A0F 100%);
+    background: linear-gradient(135deg, #2d5016 0%, #1a3a0f 100%);
     overflow: hidden;
-}
-
-/* Star Field */
-.star-field {
-    position: absolute;
     width: 100%;
     height: 100%;
-    background-image:
-        radial-gradient(2px 2px at 20px 30px, white, transparent),
-        radial-gradient(2px 2px at 60px 70px, white, transparent),
-        radial-gradient(1px 1px at 50px 50px, white, transparent),
-        radial-gradient(1px 1px at 130px 80px, white, transparent),
-        radial-gradient(2px 2px at 90px 10px, white, transparent),
-        radial-gradient(1px 1px at 200px 150px, white, transparent),
-        radial-gradient(1px 1px at 300px 50px, white, transparent),
-        radial-gradient(2px 2px at 400px 200px, white, transparent),
-        radial-gradient(1px 1px at 500px 100px, white, transparent),
-        radial-gradient(1px 1px at 600px 180px, white, transparent),
-        radial-gradient(2px 2px at 700px 80px, white, transparent),
-        radial-gradient(1px 1px at 100px 250px, white, transparent),
-        radial-gradient(1px 1px at 250px 300px, white, transparent),
-        radial-gradient(2px 2px at 350px 400px, white, transparent),
-        radial-gradient(1px 1px at 450px 350px, white, transparent),
-        radial-gradient(1px 1px at 550px 450px, white, transparent),
-        radial-gradient(2px 2px at 650px 300px, white, transparent),
-        radial-gradient(1px 1px at 150px 500px, white, transparent),
-        radial-gradient(1px 1px at 320px 520px, white, transparent),
-        radial-gradient(2px 2px at 480px 480px, white, transparent);
-    background-repeat: repeat;
-    background-size: 800px 600px;
-    animation: twinkle 5s ease-in-out infinite;
 }
 
-@keyframes twinkle {
-    0%, 100% { opacity: 1; }
-    50% { opacity: 0.5; }
+.maze-container {
+    position: relative;
+    width: 100%;
+    height: 100%;
+    border: none;
+    background-color: transparent;
 }
 
-/* Shooting Stars */
-.shooting-star {
+/* Maze Walls */
+.maze-wall {
     position: absolute;
-    width: 2px;
-    height: 2px;
-    background: white;
-    border-radius: 50%;
-    box-shadow: 0 0 4px 2px rgba(255,255,255,0.8);
-    animation: shoot 3s linear infinite;
-}
-
-.shooting-star::before {
-    content: '';
-    position: absolute;
-    top: 0;
-    right: 0;
-    width: 100px;
-    height: 1px;
-    background: linear-gradient(90deg, rgba(255,255,255,0) 0%, rgba(255,255,255,0.8) 100%);
-    transform: translateX(2px);
-}
-
-@keyframes shoot {
-    0% {
-        transform: translateX(0) translateY(0);
-        opacity: 1;
-    }
-    70% {
-        opacity: 1;
-    }
-    100% {
-        transform: translateX(300px) translateY(300px);
-        opacity: 0;
-    }
-}
-
-/* Large Moon */
-.large-moon {
-    position: absolute;
-    top: 50px;
-    right: 100px;
-    width: 100px;
-    height: 100px;
-    background: radial-gradient(circle at 30% 30%, #fff 0%, #e8e8e8 50%, #c0c0c0 100%);
-    border-radius: 50%;
-    box-shadow: 
-        0 0 40px rgba(255,255,255,0.4),
-        inset -10px -10px 20px rgba(0,0,0,0.2);
-    animation: moon-glow 4s ease-in-out infinite;
-}
-
-.large-moon::before {
-    content: '';
-    position: absolute;
-    top: 20px;
-    left: 30px;
-    width: 15px;
-    height: 15px;
-    background: rgba(180,180,180,0.4);
-    border-radius: 50%;
-}
-
-.large-moon::after {
-    content: '';
-    position: absolute;
-    top: 50px;
-    left: 60px;
-    width: 20px;
-    height: 20px;
-    background: rgba(180,180,180,0.3);
-    border-radius: 50%;
-}
-
-@keyframes moon-glow {
-    0%, 100% {
-        box-shadow: 
-            0 0 40px rgba(255,255,255,0.4),
-            inset -10px -10px 20px rgba(0,0,0,0.2);
-    }
-    50% {
-        box-shadow: 
-            0 0 60px rgba(255,255,255,0.6),
-            inset -10px -10px 20px rgba(0,0,0,0.2);
-    }
-}
-
-/* Telescope */
-.telescope {
-    position: absolute;
-    width: 120px;
-    height: 80px;
-}
-
-.telescope-body {
-    position: absolute;
-    bottom: 20px;
-    left: 20px;
-    width: 80px;
-    height: 20px;
-    background: linear-gradient(180deg, #4a4a4a 0%, #2a2a2a 100%);
-    border-radius: 10px;
-    transform: rotate(-30deg);
-    transform-origin: left center;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.5);
-}
-
-.telescope-lens {
-    position: absolute;
-    bottom: 35px;
-    left: 80px;
-    width: 15px;
-    height: 15px;
-    background: radial-gradient(circle, #4361ee 0%, #1a1a2e 100%);
-    border-radius: 50%;
+    background: linear-gradient(135deg, #4a4a4a 0%, #2a2a2a 100%);
     border: 2px solid #666;
     box-shadow: 
-        0 0 10px rgba(67,97,238,0.6),
-        inset 0 0 5px rgba(255,255,255,0.3);
+        0 4px 8px rgba(0,0,0,0.5),
+        inset 0 2px 4px rgba(255,255,255,0.1);
 }
 
-.telescope-tripod {
-    position: absolute;
-    bottom: 0;
-    left: 40px;
-    width: 0;
-    height: 0;
-    border-left: 15px solid transparent;
-    border-right: 15px solid transparent;
-    border-bottom: 25px solid #3a3a3a;
+.maze-wall.horizontal {
+    height: 15px;
 }
 
-/* Constellation */
-.constellation {
-    position: absolute;
-    width: 120px;
-    height: 120px;
+.maze-wall.vertical {
+    width: 15px;
 }
 
-.star-point {
+/* Hiding Spots */
+.hiding-spot {
     position: absolute;
-    width: 6px;
-    height: 6px;
+    font-size: 40px;
+    cursor: pointer;
+    transition: transform 0.2s;
+    z-index: 10;
+}
+
+.hiding-spot:hover {
+    transform: scale(1.1);
+}
+
+/* Maze UI */
+.maze-ui {
+    position: absolute;
+    top: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: rgba(0,0,0,0.8);
+    padding: 20px;
+    border-radius: 12px;
+    border: 2px solid rgba(255,255,255,0.3);
+    text-align: center;
+    z-index: 100;
+}
+
+.maze-ui h2 {
+    color: #fff;
+    margin-bottom: 15px;
+    font-size: 24px;
+}
+
+.maze-ui .role-btn {
+    display: block;
+    width: 200px;
+    margin: 10px auto;
+    padding: 15px;
+    font-size: 18px;
+    font-weight: bold;
+    border: 2px solid;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.3s;
+}
+
+.seeker-btn {
+    background: linear-gradient(135deg, #e74c3c 0%, #c0392b 100%);
+    border-color: #c0392b;
+    color: white;
+}
+
+.seeker-btn:hover {
+    transform: scale(1.05);
+    box-shadow: 0 0 20px rgba(231,76,60,0.6);
+}
+
+.hider-btn {
+    background: linear-gradient(135deg, #3498db 0%, #2980b9 100%);
+    border-color: #2980b9;
+    color: white;
+}
+
+.hider-btn:hover {
+    transform: scale(1.05);
+    box-shadow: 0 0 20px rgba(52,152,219,0.6);
+}
+
+#maze-status {
+    display: flex;
+    gap: 20px;
+    padding: 10px 20px;
+}
+
+#maze-role-display,
+#maze-timer,
+#maze-score {
+    color: white;
+    font-weight: bold;
+    font-size: 16px;
+}
+
+/* Start Screen Improvements */
+.start-step {
+    transition: opacity 0.3s;
+}
+
+.step-title {
+    font-size: 20px;
+    color: var(--text-color);
+    margin-bottom: 20px;
+}
+
+.continue-btn {
+    margin-top: 20px;
+    padding: 12px 30px;
+    font-size: 18px;
+    font-weight: bold;
+    background: linear-gradient(135deg, var(--text-color) 0%, #c72c48 100%);
+    color: white;
+    border: none;
+    border-radius: 25px;
+    cursor: pointer;
+    transition: all 0.3s;
+    box-shadow: 0 4px 8px rgba(0,0,0,0.3);
+}
+
+.continue-btn:hover {
+    transform: scale(1.05);
+    box-shadow: 0 6px 12px rgba(233,69,96,0.6);
+}
+
+.continue-btn:active {
+    transform: scale(0.95);
+}
+
+/* Admin UI */
+.modal {
+    position: fixed;
+    top: 0; left: 0; width: 100%; height: 100%;
+    background: rgba(0,0,0,0.8);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 2000;
+}
+
+.modal-content {
     background: white;
-    border-radius: 50%;
-    box-shadow: 0 0 8px rgba(255,255,255,0.8);
-    animation: star-pulse 2s ease-in-out infinite;
+    padding: 30px;
+    border-radius: 10px;
+    text-align: center;
 }
 
-.star-point:nth-child(odd) {
-    animation-delay: 0.5s;
-}
-
-@keyframes star-pulse {
-    0%, 100% {
-        transform: scale(1);
-        opacity: 1;
-    }
-    50% {
-        transform: scale(1.3);
-        opacity: 0.7;
-    }
-}
-
-.constellation-lines {
+#admin-controls {
     position: absolute;
-    top: 0;
-    left: 0;
-    width: 120px;
-    height: 120px;
-    pointer-events: none;
+    top: 10px;
+    left: 10px;
+    background: rgba(0,0,0,0.8);
+    padding: 15px;
+    border-radius: 8px;
+    color: white;
+    z-index: 1000;
+    border: 1px solid #444;
 }
 
-
+.control-group {
+    margin: 10px 0;
+}
 

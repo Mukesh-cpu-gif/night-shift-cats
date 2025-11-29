@@ -12,6 +12,33 @@ let playerY = 300;
 let playerRoom = "office"; // office, study, hangout
 let speed = 4;
 let isGameRunning = false;
+let isAdmin = false; // Admin status
+
+// Admin Functions
+function verifyAdminPassword() {
+    const passwordInput = document.getElementById('admin-password');
+    if (passwordInput.value === '1234') {
+        isAdmin = true;
+        document.getElementById('password-modal').classList.add('hidden');
+        document.getElementById('admin-controls').classList.remove('hidden');
+        startScreen.style.display = 'none';
+        isGameRunning = true;
+        initGame();
+    } else {
+        alert('Incorrect Password!');
+    }
+}
+
+function kickPlayer(targetId) {
+    if (!isAdmin) return;
+    db.ref('rooms/default/players/' + targetId).remove();
+}
+
+function updateGameSpeed(newSpeed) {
+    if (!isAdmin) return;
+    speed = parseInt(newSpeed);
+    // Broadcast speed change to all players (optional, for now just local admin speed)
+}
 
 // Timer State
 let personalTimerInterval = null;
@@ -29,6 +56,184 @@ let db;
 let playersRef;
 let myPlayerRef;
 let chatRef;
+
+// Maze Game State
+let mazeRole = null; // 'seeker' or 'hider'
+let mazeWalls = [];
+let mazeTimer = 0;
+let mazeScore = 0;
+let mazeGameActive = false;
+
+// Start Screen Flow Function
+function proceedToGenderSelection() {
+    const nameInput = document.getElementById('nickname');
+    const name = nameInput.value.trim();
+
+    if (!name) {
+        alert('Please enter your name first!');
+        return;
+    }
+
+    playerNickname = name;
+
+    // Hide name step, show gender step
+    document.getElementById('name-step').classList.add('hidden');
+    document.getElementById('gender-step').classList.remove('hidden');
+}
+
+// Maze Game Functions
+function selectMazeRole(role) {
+    mazeRole = role;
+
+    // Hide role selection, show game status
+    document.getElementById('maze-role-selection').classList.add('hidden');
+    document.getElementById('maze-status').classList.remove('hidden');
+
+    // Update role display
+    const roleDisplay = document.getElementById('maze-role-display');
+    if (role === 'seeker') {
+        roleDisplay.textContent = '🔍 You are the SEEKER';
+        roleDisplay.style.color = '#e74c3c';
+    } else {
+        roleDisplay.textContent = '🙈 You are a HIDER';
+        roleDisplay.style.color = '#3498db';
+    }
+
+    mazeGameActive = true;
+
+    // Sync role to Firebase
+    if (myPlayerRef) {
+        myPlayerRef.update({ mazeRole: role });
+    }
+}
+
+// Initialize maze walls using Recursive Backtracking (DFS)
+function initMazeWalls() {
+    const w = window.innerWidth;
+    const h = window.innerHeight;
+
+    // Grid settings
+    const cols = 16;
+    const rows = 9;
+    const cellW = w / cols;
+    const cellH = h / rows;
+
+    const grid = [];
+    const stack = [];
+
+    // Initialize grid
+    for (let r = 0; r < rows; r++) {
+        for (let c = 0; c < cols; c++) {
+            grid.push({
+                c, r,
+                walls: { top: true, right: true, bottom: true, left: true },
+                visited: false
+            });
+        }
+    }
+
+    // Helper to get index
+    const index = (c, r) => {
+        if (c < 0 || r < 0 || c >= cols || r >= rows) return -1;
+        return c + r * cols;
+    };
+
+    // Start DFS
+    let current = grid[0];
+    current.visited = true;
+    stack.push(current);
+
+    while (stack.length > 0) {
+        current = stack.pop();
+        const neighbors = [];
+
+        const top = grid[index(current.c, current.r - 1)];
+        const right = grid[index(current.c + 1, current.r)];
+        const bottom = grid[index(current.c, current.r + 1)];
+        const left = grid[index(current.c - 1, current.r)];
+
+        if (top && !top.visited) neighbors.push(top);
+        if (right && !right.visited) neighbors.push(right);
+        if (bottom && !bottom.visited) neighbors.push(bottom);
+        if (left && !left.visited) neighbors.push(left);
+
+        if (neighbors.length > 0) {
+            stack.push(current);
+            const next = neighbors[Math.floor(Math.random() * neighbors.length)];
+
+            // Remove walls
+            if (current.c - next.c === 1) { // Left
+                current.walls.left = false;
+                next.walls.right = false;
+            } else if (current.c - next.c === -1) { // Right
+                current.walls.right = false;
+                next.walls.left = false;
+            } else if (current.r - next.r === 1) { // Top
+                current.walls.top = false;
+                next.walls.bottom = false;
+            } else if (current.r - next.r === -1) { // Bottom
+                current.walls.bottom = false;
+                next.walls.top = false;
+            }
+
+            next.visited = true;
+            stack.push(next);
+        }
+    }
+
+    // Convert grid walls to collision rects and render
+    mazeWalls = [];
+    const container = document.querySelector('.maze-container');
+    if (container) container.innerHTML = ''; // Clear old walls
+
+    const thick = 6;
+
+    grid.forEach(cell => {
+        const x = cell.c * cellW;
+        const y = cell.r * cellH;
+
+        if (cell.walls.top) addWall(x, y, cellW + thick, thick);
+        if (cell.walls.left) addWall(x, y, thick, cellH + thick);
+        if (cell.c === cols - 1 && cell.walls.right) addWall(x + cellW, y, thick, cellH + thick);
+        if (cell.r === rows - 1 && cell.walls.bottom) addWall(x, y + cellH, cellW + thick, thick);
+    });
+}
+
+function addWall(x, y, w, h) {
+    mazeWalls.push({ x, y, width: w, height: h });
+
+    const div = document.createElement('div');
+    div.className = 'maze-wall';
+    div.style.left = `${x}px`;
+    div.style.top = `${y}px`;
+    div.style.width = `${w}px`;
+    div.style.height = `${h}px`;
+
+    const container = document.querySelector('.maze-container');
+    if (container) container.appendChild(div);
+}
+
+// Check collision with maze walls
+function checkMazeCollision(newX, newY) {
+    if (playerRoom !== 'skyview') return false;
+
+    const playerSize = 25;
+    const hitBox = 15;
+    const offset = (playerSize - hitBox) / 2;
+
+    const testX = newX + offset;
+    const testY = newY + offset;
+
+    for (const wall of mazeWalls) {
+        if (testX < wall.x + wall.width &&
+            testX + hitBox > wall.x &&
+            testY < wall.y + wall.height &&
+            testY + hitBox > wall.y) {
+            return true;
+        }
+    }
+    return false;
+}
 
 // DOM Elements
 const startScreen = document.getElementById('start-screen');
@@ -57,23 +262,20 @@ const rooms = {
     skyview: document.getElementById('room-skyview')
 };
 
-// Desk Zones (Study Room)
-const deskZones = [
-    { x: 160, y: 130 }, // Top Left
-    { x: 640, y: 130 }, // Top Right
-    { x: 160, y: 330 }, // Bottom Left
-    { x: 640, y: 330 }  // Bottom Right
-];
+// Desk Zones (Study Room) - Dynamic
+function getDeskZones() {
+    const w = window.innerWidth;
+    const h = window.innerHeight;
+    return [
+        { x: w * 0.2, y: h * 0.25 }, // Top Left
+        { x: w * 0.8, y: h * 0.25 }, // Top Right
+        { x: w * 0.2, y: h * 0.75 }, // Bottom Left
+        { x: w * 0.8, y: h * 0.75 }  // Bottom Right
+    ];
+}
 
 // Initialize Game
-function startGame(role) {
-    const name = nicknameInput.value.trim();
-    if (name) playerNickname = name;
-    playerRole = role;
-
-    startScreen.style.display = 'none';
-    isGameRunning = true;
-
+function initGame() {
     // Initialize Firebase
     if (typeof firebase !== 'undefined') {
         try {
@@ -91,6 +293,14 @@ function startGame(role) {
             setupPlayerListeners();
             setupChatListener();
 
+            // Listen for being kicked
+            myPlayerRef.on('value', (snapshot) => {
+                if (snapshot.val() === null && isGameRunning) {
+                    alert('You have been kicked by an admin!');
+                    location.reload();
+                }
+            });
+
             db.ref('.info/connected').on('value', (snap) => {
                 if (snap.val() === true) connectionStatus.classList.add('hidden');
                 else connectionStatus.classList.remove('hidden');
@@ -106,20 +316,53 @@ function startGame(role) {
     setInterval(updateClock, 1000);
     updateClock();
 
+    // Initialize maze walls for collision detection
+    initMazeWalls();
+
     requestAnimationFrame(gameLoop);
 }
 
-// Input Listeners
-window.addEventListener('keydown', (e) => {
-    const key = e.key.length === 1 ? e.key.toLowerCase() : e.key;
-    if (keys.hasOwnProperty(key)) keys[key] = true;
-    if (e.key === 'Enter' && playerRoom === 'hangout') sendChat();
-});
+function startGame(role) {
+    const name = nicknameInput.value.trim();
+    if (name) playerNickname = name;
+    playerRole = role;
 
-window.addEventListener('keyup', (e) => {
-    const key = e.key.length === 1 ? e.key.toLowerCase() : e.key;
-    if (keys.hasOwnProperty(key)) keys[key] = false;
-});
+    // Check for Admin Login
+    if (playerNickname.toLowerCase() === 'mukesh') {
+        document.getElementById('password-modal').classList.remove('hidden');
+        return; // Stop here, wait for password
+    }
+
+    // Check for unique username
+    if (typeof firebase !== 'undefined') {
+        const dbRef = firebase.database().ref('rooms/default/players');
+        dbRef.once('value').then((snapshot) => {
+            const players = snapshot.val() || {};
+            const isTaken = Object.values(players).some(p =>
+                p.nickname && p.nickname.toLowerCase() === playerNickname.toLowerCase()
+            );
+
+            if (isTaken) {
+                alert('Username already taken! Please choose another one.');
+            } else {
+                startScreen.style.display = 'none';
+                isGameRunning = true;
+                initGame();
+            }
+        }).catch((error) => {
+            console.error("Error checking username:", error);
+            // Fallback to allow game start if check fails
+            startScreen.style.display = 'none';
+            isGameRunning = true;
+            initGame();
+        });
+    } else {
+        // Fallback for local testing without Firebase
+        startScreen.style.display = 'none';
+        isGameRunning = true;
+        initGame();
+    }
+}
 
 // Mobile Controls
 const btnUp = document.getElementById('btn-up');
@@ -197,14 +440,37 @@ function gameLoop() {
                 dy *= 0.707;
             }
 
-            playerX += dx;
-            playerY += dy;
+            // Calculate new position
+            const newX = playerX + dx;
+            const newY = playerY + dy;
 
-            // Bounds checking
+            // Check maze wall collision with sliding
+            if (playerRoom === 'skyview') {
+                const canMoveX = !checkMazeCollision(newX, playerY);
+                const canMoveY = !checkMazeCollision(playerX, newY);
+                const canMoveBoth = !checkMazeCollision(newX, newY);
+
+                if (canMoveBoth) {
+                    playerX = newX;
+                    playerY = newY;
+                } else if (canMoveX) {
+                    playerX = newX;
+                } else if (canMoveY) {
+                    playerY = newY;
+                }
+            } else {
+                playerX = newX;
+                playerY = newY;
+            }
+
+            // Dynamic Bounds Checking
+            const maxX = window.innerWidth - 25;
+            const maxY = window.innerHeight - 25;
+
             if (playerX < 0) playerX = 0;
             if (playerY < 0) playerY = 0;
-            if (playerX > 760) playerX = 760;
-            if (playerY > 560) playerY = 560;
+            if (playerX > maxX) playerX = maxX;
+            if (playerY > maxY) playerY = maxY;
         }
 
         checkRoomTransitions();
@@ -214,7 +480,7 @@ function gameLoop() {
         // Update network position more frequently if moving
         const now = Date.now();
         const isMoving = dx !== 0 || dy !== 0;
-        const updateInterval = isMoving ? 50 : 100; // Faster updates when moving
+        const updateInterval = isMoving ? 50 : 100;
 
         if (now - lastNetworkUpdate > updateInterval) {
             updateMyPosition();
@@ -237,41 +503,44 @@ function gameLoop() {
 }
 
 function checkRoomTransitions() {
-    // Office -> Study (left door)
-    if (playerRoom === 'office' && playerX < 20 && playerY > 220 && playerY < 360) {
-        switchRoom('study', 380, 450);
+    const w = window.innerWidth;
+    const h = window.innerHeight;
+
+    // Office -> Study (left door: top 40%, left 2%)
+    if (playerRoom === 'office' && playerX < w * 0.05 && playerY > h * 0.35 && playerY < h * 0.55) {
+        switchRoom('study', w * 0.5, h * 0.5);
     }
-    // Office -> Hangout (right door)
-    else if (playerRoom === 'office' && playerX > 710 && playerY > 220 && playerY < 360) {
-        switchRoom('hangout', 380, 450);
+    // Office -> Hangout (right door: top 40%, right 2%)
+    else if (playerRoom === 'office' && playerX > w * 0.95 && playerY > h * 0.35 && playerY < h * 0.55) {
+        switchRoom('hangout', w * 0.5, h * 0.5);
     }
-    // Office -> Matchi (top door)
-    else if (playerRoom === 'office' && playerY < 20 && playerX > 320 && playerX < 480) {
-        switchRoom('matchi', 400, 550);
+    // Office -> Matchi (top door: top 2%, center)
+    else if (playerRoom === 'office' && playerY < h * 0.05 && playerX > w * 0.4 && playerX < w * 0.6) {
+        switchRoom('matchi', w * 0.5, h * 0.8);
     }
-    // Office -> Skyview (bottom-right door)
-    else if (playerRoom === 'office' && playerY > 470 && playerX > 630 && playerX < 790) {
-        switchRoom('skyview', 400, 50);
+    // Office -> Skyview (bottom-right door: bottom 10%, right 5%)
+    else if (playerRoom === 'office' && playerY > h * 0.85 && playerX > w * 0.85) {
+        switchRoom('skyview', w * 0.1, h * 0.1);
     }
-    // Study -> Office
-    else if (playerRoom === 'study' && playerY > 550 && playerX > 350 && playerX < 450) {
-        switchRoom('office', 90, 280);
-    }
-    // Hangout -> Office
-    else if (playerRoom === 'hangout' && playerY > 550 && playerX > 350 && playerX < 450) {
-        switchRoom('office', 650, 280);
-    }
-    // Matchi -> Office (bottom door)
-    else if (playerRoom === 'matchi' && playerY > 550 && playerX > 350 && playerX < 450) {
-        switchRoom('office', 400, 90);
-    }
-    // Skyview -> Office (bottom center door)
-    else if (playerRoom === 'skyview' && playerY > 460 && playerX > 300 && playerX < 500) {
-        switchRoom('office', 650, 400);
+
+    // Back to Office (from any room)
+    else if (playerRoom !== 'office' && playerRoom !== 'skyview') {
+        // Bottom center door
+        if (playerY > h * 0.9 && playerX > w * 0.4 && playerX < w * 0.6) {
+            switchRoom('office', w * 0.5, h * 0.5);
+        }
     }
 }
 
 function switchRoom(newRoom, newX, newY) {
+    // Handle percentage strings if passed
+    if (typeof newX === 'string' && newX.includes('%')) {
+        newX = (parseFloat(newX) / 100) * window.innerWidth;
+    }
+    if (typeof newY === 'string' && newY.includes('%')) {
+        newY = (parseFloat(newY) / 100) * window.innerHeight;
+    }
+
     playerRoom = newRoom;
     playerX = newX;
     playerY = newY;
@@ -282,9 +551,13 @@ function switchRoom(newRoom, newX, newY) {
     if (newRoom === 'hangout') chatUi.classList.remove('hidden');
     else chatUi.classList.add('hidden');
 
-    // Hide timer UI when leaving study room, unless running (but hide controls)
     if (newRoom !== 'study') {
         personalTimerUi.classList.add('hidden');
+    }
+
+    // Re-init maze walls if entering skyview
+    if (newRoom === 'skyview') {
+        initMazeWalls();
     }
 
     refreshPlayerVisibility();
@@ -297,9 +570,11 @@ function checkDeskProximity() {
     }
 
     let near = false;
-    for (const zone of deskZones) {
+    const zones = getDeskZones();
+
+    for (const zone of zones) {
         const dist = Math.sqrt(Math.pow(playerX - zone.x, 2) + Math.pow(playerY - zone.y, 2));
-        if (dist < 60) {
+        if (dist < 100) {
             near = true;
             break;
         }
@@ -307,16 +582,12 @@ function checkDeskProximity() {
 
     isNearDesk = near;
 
-    // Show UI if near desk OR timer is running
     if (isNearDesk || personalTimerInterval) {
         personalTimerUi.classList.remove('hidden');
-
-        // If timer running, show stop button, hide start controls
         if (personalTimerInterval) {
             timerControls.classList.add('hidden');
             stopBtn.classList.remove('hidden');
         } else {
-            // If just near desk and no timer, show start controls
             timerControls.classList.remove('hidden');
             stopBtn.classList.add('hidden');
         }
@@ -349,7 +620,6 @@ function setupPlayerListeners() {
 function createPlayerElement(id, data) {
     if (players[id]) return;
 
-    // Don't spawn stale players (older than 10 seconds)
     if (data.lastUpdated && (Date.now() - data.lastUpdated > 10000)) {
         return;
     }
@@ -371,7 +641,7 @@ function createPlayerElement(id, data) {
 function updatePlayerElement(id, data) {
     if (!players[id]) {
         createPlayerElement(id, data);
-        if (!players[id]) return; // Still stale/ignored
+        if (!players[id]) return;
     }
     const p = players[id];
     p.data = data;
@@ -397,23 +667,6 @@ function removePlayerElement(id) {
     }
 }
 
-function renderMyPlayer() {
-    if (!players[playerId]) {
-        createPlayerElement(playerId, { x: playerX, y: playerY, nickname: playerNickname, role: playerRole, room: playerRoom });
-    }
-    const p = players[playerId];
-    if (p) {
-        p.el.style.transform = `translate(${playerX}px, ${playerY}px)`;
-        p.el.style.display = 'block';
-    }
-}
-
-function refreshPlayerVisibility() {
-    Object.keys(players).forEach(id => {
-        if (id !== playerId) updatePlayerElement(id, players[id].data);
-    });
-}
-
 // Personal Timer Logic
 function startPersonalTimer(minutes) {
     personalTimerEndTime = Date.now() + minutes * 60000;
@@ -421,7 +674,6 @@ function startPersonalTimer(minutes) {
     updatePersonalTimer();
     personalTimerInterval = setInterval(updatePersonalTimer, 1000);
 
-    // Update UI immediately
     timerControls.classList.add('hidden');
     stopBtn.classList.remove('hidden');
 }
@@ -431,7 +683,6 @@ function stopPersonalTimer() {
     personalTimerInterval = null;
     timerDisplay.innerText = "25:00";
 
-    // Update UI
     timerControls.classList.remove('hidden');
     stopBtn.classList.add('hidden');
 }
@@ -454,7 +705,7 @@ function updatePersonalTimer() {
 
 // Analog Clock Logic
 function updateClock() {
-    if (playerRoom !== 'study') return; // Optimization
+    if (playerRoom !== 'study') return;
 
     const now = new Date();
     const seconds = now.getSeconds();
@@ -494,3 +745,42 @@ function sendChat() {
 
     chatInput.value = '';
 }
+
+// Keyboard Input
+window.addEventListener('keydown', (e) => {
+    if (keys.hasOwnProperty(e.key)) keys[e.key] = true;
+});
+
+window.addEventListener('keyup', (e) => {
+    if (keys.hasOwnProperty(e.key)) keys[e.key] = false;
+});
+
+// Render local player position
+function renderMyPlayer() {
+    if (!players[playerId]) return;
+    const p = players[playerId];
+
+    // Ensure visible
+    p.el.style.display = 'block';
+    p.el.style.transform = `translate(${playerX}px, ${playerY}px)`;
+
+    // Update role class if changed
+    if (!p.el.classList.contains(playerRole)) {
+        p.el.className = `player ${playerRole}`;
+    }
+}
+
+// Helper to refresh visibility when switching rooms
+function refreshPlayerVisibility() {
+    Object.keys(players).forEach(id => {
+        updatePlayerElement(id, players[id].data);
+    });
+}
+
+// Handle resize events to update walls
+window.addEventListener('resize', () => {
+    initMazeWalls();
+});
+
+// Initial call
+initMazeWalls();
