@@ -1254,7 +1254,7 @@ window.proceedToGenderSelection = function () {
 };
 
 window.startGame = function (role) {
-    if (!game) { alert("Game is still loading... please wait."); return; }
+    if (!game || !game.renderer) { alert("Game is still loading... please wait."); return; }
     const nickname = document.getElementById('nickname').value.trim();
     if (!nickname) { alert("Please enter a name!"); return; }
     document.getElementById('start-screen').classList.add('hidden');
