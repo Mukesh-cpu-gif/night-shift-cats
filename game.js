@@ -113,6 +113,8 @@ class InputManager {
     }
 
     onKeyDown(e) {
+        if (!e || !e.key) return;
+
         // ESC to exit game
         if (e.key === 'Escape') {
             if (window.game && window.game.localPlayer) {
@@ -129,6 +131,7 @@ class InputManager {
     }
 
     onKeyUp(e) {
+        if (!e || !e.key) return;
         this.keys[e.key] = false;
         if (e.key.toLowerCase() === 'e') this.interactPressed = false;
         this.updateDirection();
