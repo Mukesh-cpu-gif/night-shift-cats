@@ -1,0 +1,675 @@
+/**
+ * Night Shift Cats - Complete Game Engine
+ * Full Canvas-based Multiplayer Game with Interactive Objects
+ */
+
+// ============================================================================
+// CONFIGURATION
+// ============================================================================
+const CONFIG = {
+    PLAYER_SPEED: 200,
+    TICK_RATE: 15,
+    WORLD_SIZE: 1200,
+    COLORS: {
+        OFFICE_BG: '#16213e',
+        STUDY_BG: '#2c1a1d',
+        HANGOUT_BG: '#1a237e',
+        MATCHI_BG: '#1a1a2e',
+        SKYVIEW_BG: '#000000',
+        BOY: '#4361ee',
+        GIRL: '#f72585',
+        WOOD: '#5d4037',
+        SCREEN: '#00ffff',
+        RUG: '#8b4513'
+    }
+};
+
+// ============================================================================
+// UTILITY CLASSES
+// ============================================================================
+class Vector2 {
+    constructor(x = 0, y = 0) {
+        this.x = x;
+        this.y = y;
+    }
+    add(v) { return new Vector2(this.x + v.x, this.y + v.y); }
+    sub(v) { return new Vector2(this.x - v.x, this.y - v.y); }
+    mult(n) { return new Vector2(this.x * n, this.y * n); }
+    mag() { return Math.sqrt(this.x * this.x + this.y * this.y); }
+    normalize() {
+        const m = this.mag();
+        return m === 0 ? new Vector2(0, 0) : new Vector2(this.x / m, this.y / m);
+    }
+    lerp(v, t) {
+        return new Vector2(
+            this.x + (v.x - this.x) * t,
+            this.y + (v.y - this.y) * t
+        );
+    }
+    dist(v) { return Math.sqrt(Math.pow(this.x - v.x, 2) + Math.pow(this.y - v.y, 2)); }
+}
+
+// ============================================================================
+// ASSET MANAGER
+// ============================================================================
+class AssetManager {
+    constructor() {
+        this.images = {};
+        this.loaded = false;
+        this.useFallback = false;
+    }
+
+    loadImage(key, src) {
+        return new Promise((resolve) => {
+            const img = new Image();
+            const timeout = setTimeout(() => {
+                console.warn(`Asset ${key} timed out, using fallback`);
+                this.useFallback = true;
+                resolve(false);
+            }, 3000);
+
+            img.onload = () => {
+                clearTimeout(timeout);
+                this.images[key] = img;
+                console.log(`Loaded: ${key}`);
+                resolve(true);
+            };
+
+            img.onerror = (e) => {
+                clearTimeout(timeout);
+                console.error(`❌ FAILED TO LOAD ASSET: ${key} from ${src}`);
+                console.error('Error details:', e);
+                console.error('Check if file exists and path is correct!');
+                this.useFallback = true;
+                resolve(false);
+            };
+
+            img.src = src;
+        });
+    }
+
+    async init() {
+        await this.loadImage('matchiRoom', 'matchi room.png');
+        this.loaded = true;
+    }
+
+    get(key) {
+        return this.images[key];
+    }
+}
+
+// ============================================================================
+// INPUT MANAGER
+// ============================================================================
+class InputManager {
+    constructor() {
+        this.keys = {};
+        this.direction = new Vector2(0, 0);
+        this.interactPressed = false;
+
+        window.addEventListener('keydown', (e) => this.onKeyDown(e));
+        window.addEventListener('keyup', (e) => this.onKeyUp(e));
+        this.setupMobileControls();
+    }
+
+    onKeyDown(e) {
+        // ESC to exit game
+        if (e.key === 'Escape') {
+            if (window.game && window.game.localPlayer) {
+                if (confirm('Exit game and return to start screen?')) {
+                    window.game.exitGame();
+                }
+            }
+            return;
+        }
+
+        this.keys[e.key] = true;
+        if (e.key.toLowerCase() === 'e') this.interactPressed = true;
+        this.updateDirection();
+    }
+
+    onKeyUp(e) {
+        this.keys[e.key] = false;
+        if (e.key.toLowerCase() === 'e') this.interactPressed = false;
+        this.updateDirection();
+    }
+
+    updateDirection() {
+        let x = 0, y = 0;
+        if (this.keys['w'] || this.keys['ArrowUp']) y -= 1;
+        if (this.keys['s'] || this.keys['ArrowDown']) y += 1;
+        if (this.keys['a'] || this.keys['ArrowLeft']) x -= 1;
+        if (this.keys['d'] || this.keys['ArrowRight']) x += 1;
+        this.direction = new Vector2(x, y).normalize();
+    }
+
+    setupMobileControls() {
+        const bindBtn = (id, key) => {
+            const btn = document.getElementById(id);
+            if (!btn) return;
+            const start = (e) => { e.preventDefault(); this.keys[key] = true; this.updateDirection(); };
+            const end = (e) => { e.preventDefault(); this.keys[key] = false; this.updateDirection(); };
+            btn.addEventListener('touchstart', start);
+            btn.addEventListener('touchend', end);
+            btn.addEventListener('mousedown', start);
+            btn.addEventListener('mouseup', end);
+        };
+
+        bindBtn('btn-up', 'ArrowUp');
+        bindBtn('btn-down', 'ArrowDown');
+        bindBtn('btn-left', 'ArrowLeft');
+        bindBtn('btn-right', 'ArrowRight');
+
+        const interactBtn = document.getElementById('btn-interact');
+        if (interactBtn) {
+            interactBtn.addEventListener('touchstart', (e) => { e.preventDefault(); this.interactPressed = true; });
+            interactBtn.addEventListener('touchend', (e) => { e.preventDefault(); this.interactPressed = false; });
+        }
+    }
+}
+
+// ============================================================================
+// NETWORK MANAGER
+// ============================================================================
+class NetworkManager {
+    constructor(game) {
+        this.game = game;
+        this.db = null;
+        this.playersRef = null;
+        this.myRef = null;
+        this.lastUpdate = 0;
+        this.updateInterval = 1000 / CONFIG.TICK_RATE;
+    }
+
+    init(playerId, playerData) {
+        if (typeof firebase === 'undefined') {
+            console.warn("Firebase not loaded. Offline mode.");
+            return;
+        }
+
+        this.db = firebase.database();
+        this.playersRef = this.db.ref('rooms/default/players');
+        this.myRef = this.playersRef.child(playerId);
+
+        this.myRef.set(playerData);
+        this.myRef.onDisconnect().remove();
+
+        this.playersRef.on('child_added', (snap) => this.game.addRemotePlayer(snap.key, snap.val()));
+        this.playersRef.on('child_changed', (snap) => this.game.updateRemotePlayer(snap.key, snap.val()));
+        this.playersRef.on('child_removed', (snap) => this.game.removeRemotePlayer(snap.key));
+
+        this.chatRef = this.db.ref('rooms/default/chat');
+        this.chatRef.limitToLast(10).on('child_added', (snap) => this.game.addChatMessage(snap.val()));
+
+        this.db.ref('.info/connected').on('value', (snap) => {
+            document.getElementById('connection-status').classList.toggle('hidden', snap.val());
+        });
+    }
+
+    update(player) {
+        if (!this.myRef) return;
+        const now = Date.now();
+        if (now - this.lastUpdate > this.updateInterval) {
+            this.myRef.update({
+                x: Math.round(player.pos.x),
+                y: Math.round(player.pos.y),
+                room: player.room,
+                lastUpdated: firebase.database.ServerValue.TIMESTAMP
+            });
+            this.lastUpdate = now;
+        }
+    }
+
+    sendChat() {
+        const input = document.getElementById('chat-input');
+        const msg = input.value.trim();
+        if (!msg) return;
+
+        const name = this.game.localPlayer?.nickname || 'Guest';
+        this.chatRef.push({
+            name: name,
+            msg: msg,
+            timestamp: firebase.database.ServerValue.TIMESTAMP
+        });
+        input.value = '';
+    }
+}
+
+// ============================================================================
+// MAZE GENERATOR
+// ============================================================================
+class MazeGenerator {
+    constructor(cols, rows, seed) {
+        this.cols = cols;
+        this.rows = rows;
+        this.grid = [];
+        this.seed = seed;
+        this.random = this.seededRandom(seed);
+    }
+
+    seededRandom(seed) {
+        const m = 0x80000000;
+        const a = 1103515245;
+        const c = 12345;
+        let state = seed;
+        return function () {
+            state = (a * state + c) % m;
+            return state / (m - 1);
+        };
+    }
+
+    generate() {
+        for (let r = 0; r < this.rows; r++) {
+            for (let c = 0; c < this.cols; c++) {
+                this.grid.push({
+                    c, r,
+                    walls: { top: true, right: true, bottom: true, left: true },
+                    visited: false
+                });
+            }
+        }
+
+        const stack = [];
+        let current = this.grid[0];
+        current.visited = true;
+        stack.push(current);
+
+        while (stack.length > 0) {
+            current = stack.pop();
+            const neighbors = this.getUnvisitedNeighbors(current);
+
+            if (neighbors.length > 0) {
+                stack.push(current);
+                const next = neighbors[Math.floor(this.random() * neighbors.length)];
+
+                if (current.c - next.c === 1) {
+                    current.walls.left = false;
+                    next.walls.right = false;
+                } else if (current.c - next.c === -1) {
+                    current.walls.right = false;
+                    next.walls.left = false;
+                } else if (current.r - next.r === 1) {
+                    current.walls.top = false;
+                    next.walls.bottom = false;
+                } else if (current.r - next.r === -1) {
+                    current.walls.bottom = false;
+                    next.walls.top = false;
+                }
+
+                next.visited = true;
+                stack.push(next);
+            }
+        }
+
+        return this.grid;
+    }
+
+    getUnvisitedNeighbors(cell) {
+        const neighbors = [];
+        const index = (c, r) => {
+            if (c < 0 || r < 0 || c >= this.cols || r >= this.rows) return -1;
+            return c + r * this.cols;
+        };
+
+        const top = this.grid[index(cell.c, cell.r - 1)];
+        const right = this.grid[index(cell.c + 1, cell.r)];
+        const bottom = this.grid[index(cell.c, cell.r + 1)];
+        const left = this.grid[index(cell.c - 1, cell.r)];
+
+        if (top && !top.visited) neighbors.push(top);
+        if (right && !right.visited) neighbors.push(right);
+        if (bottom && !bottom.visited) neighbors.push(bottom);
+        if (left && !left.visited) neighbors.push(left);
+
+        return neighbors;
+    }
+}
+
+// ============================================================================
+// GAME ENTITIES
+// ============================================================================
+class Player {
+    constructor(id, data, isLocal = false) {
+        this.id = id;
+        this.nickname = data.nickname;
+        this.role = data.role;
+        this.room = data.room;
+        this.pos = new Vector2(data.x, data.y);
+        this.targetPos = new Vector2(data.x, data.y);
+        this.isLocal = isLocal;
+        this.color = this.role === 'boy' ? CONFIG.COLORS.BOY : CONFIG.COLORS.GIRL;
+        this.breathePhase = 0;
+        this.isMoving = false;
+        this.speedMultiplier = 1.0;
+        this.speedParticles = [];
+    }
+
+    update(dt) {
+        if (!this.isLocal) {
+            const dist = this.pos.dist(this.targetPos);
+            if (dist > 200) {
+                this.pos = this.targetPos;
+            } else {
+                this.pos = this.pos.lerp(this.targetPos, Math.min(1, dt * 10));
+            }
+            this.isMoving = dist > 1;
+        }
+
+        this.breathePhase += dt * 2;
+
+        // Speed particles
+        if (this.speedMultiplier > 1 && this.isMoving) {
+            if (Math.random() < 0.3) {
+                this.speedParticles.push({
+                    pos: new Vector2(this.pos.x, this.pos.y),
+                    life: 0.5
+                });
+            }
+        }
+
+        this.speedParticles.forEach(p => p.life -= dt);
+        this.speedParticles = this.speedParticles.filter(p => p.life > 0);
+    }
+
+    draw(ctx) {
+        const breatheScale = this.isMoving ? 1 : 1 + Math.sin(this.breathePhase) * 0.05;
+
+        ctx.save();
+        ctx.translate(this.pos.x, this.pos.y);
+        ctx.scale(breatheScale, breatheScale);
+        ctx.translate(-this.pos.x, -this.pos.y);
+
+        // Shadow
+        ctx.fillStyle = 'rgba(0,0,0,0.3)';
+        ctx.beginPath();
+        ctx.ellipse(this.pos.x, this.pos.y + 20, 15, 5, 0, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Cat Head with gradient
+        const gradient = ctx.createRadialGradient(this.pos.x - 5, this.pos.y - 5, 5, this.pos.x, this.pos.y, 25);
+        gradient.addColorStop(0, this.color);
+        gradient.addColorStop(1, this.role === 'boy' ? '#1e3a8a' : '#9f1239');
+        ctx.fillStyle = gradient;
+        ctx.beginPath();
+        ctx.ellipse(this.pos.x, this.pos.y, 22, 20, 0, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Ears
+        ctx.beginPath();
+        ctx.moveTo(this.pos.x - 18, this.pos.y - 12);
+        ctx.lineTo(this.pos.x - 25, this.pos.y - 30);
+        ctx.lineTo(this.pos.x - 8, this.pos.y - 15);
+        ctx.fill();
+
+        ctx.beginPath();
+        ctx.moveTo(this.pos.x + 18, this.pos.y - 12);
+        ctx.lineTo(this.pos.x + 25, this.pos.y - 30);
+        ctx.lineTo(this.pos.x + 8, this.pos.y - 15);
+        ctx.fill();
+
+        // Eyes
+        ctx.fillStyle = '#000';
+        ctx.beginPath();
+        ctx.arc(this.pos.x - 7, this.pos.y, 2, 0, Math.PI * 2);
+        ctx.arc(this.pos.x + 7, this.pos.y, 2, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Whiskers
+        ctx.strokeStyle = '#fff';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(this.pos.x - 12, this.pos.y + 3); ctx.lineTo(this.pos.x - 28, this.pos.y);
+        ctx.moveTo(this.pos.x - 12, this.pos.y + 7); ctx.lineTo(this.pos.x - 28, this.pos.y + 7);
+        ctx.moveTo(this.pos.x + 12, this.pos.y + 3); ctx.lineTo(this.pos.x + 28, this.pos.y);
+        ctx.moveTo(this.pos.x + 12, this.pos.y + 7); ctx.lineTo(this.pos.x + 28, this.pos.y + 7);
+        ctx.stroke();
+
+        // Name Tag
+        ctx.shadowColor = 'rgba(0,0,0,0.8)';
+        ctx.shadowBlur = 4;
+        ctx.fillStyle = 'white';
+        ctx.font = 'bold 12px Arial';
+        ctx.textAlign = 'center';
+        ctx.fillText(this.nickname, this.pos.x, this.pos.y - 40);
+        ctx.shadowBlur = 0;
+
+        // Speed particles
+        if (this.speedMultiplier > 1) {
+            this.speedParticles.forEach(p => {
+                ctx.fillStyle = `rgba(255, 200, 0, ${p.life})`;
+                ctx.beginPath();
+                ctx.arc(p.pos.x, p.pos.y, 3, 0, Math.PI * 2);
+                ctx.fill();
+            });
+        }
+
+        ctx.restore();
+    }
+}
+
+class Door {
+    constructor(x, y, targetRoom, label) {
+        this.pos = new Vector2(x, y);
+        this.width = 100;
+        this.height = 100;
+        this.targetRoom = targetRoom;
+        this.label = label;
+    }
+
+    checkCollision(playerPos) {
+        return (playerPos.x > this.pos.x && playerPos.x < this.pos.x + this.width &&
+            playerPos.y > this.pos.y && playerPos.y < this.pos.y + this.height);
+    }
+
+    draw(ctx) {
+        // Light spill effect (depth)
+        ctx.fillStyle = 'rgba(255, 215, 0, 0.2)';
+        ctx.beginPath();
+        ctx.moveTo(this.pos.x + 10, this.pos.y + this.height);
+        ctx.lineTo(this.pos.x + this.width - 10, this.pos.y + this.height);
+        ctx.lineTo(this.pos.x + this.width - 5, this.pos.y + this.height + 15);
+        ctx.lineTo(this.pos.x + 5, this.pos.y + this.height + 15);
+        ctx.closePath();
+        ctx.fill();
+
+        // Door body
+        ctx.fillStyle = CONFIG.COLORS.WOOD;
+        ctx.fillRect(this.pos.x, this.pos.y, this.width, this.height);
+
+        // Thick outer frame
+        ctx.strokeStyle = '#3e2723';
+        ctx.lineWidth = 6;
+        ctx.strokeRect(this.pos.x, this.pos.y, this.width, this.height);
+
+        // Doorknob
+        ctx.fillStyle = '#ffd700';
+        ctx.beginPath();
+        ctx.arc(this.pos.x + this.width - 15, this.pos.y + this.height / 2, 6, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Label inside door with shadow
+        ctx.shadowColor = 'rgba(0, 0, 0, 0.8)';
+        ctx.shadowBlur = 4;
+        ctx.fillStyle = 'white';
+        ctx.font = 'bold 14px Arial';
+        ctx.textAlign = 'center';
+        ctx.fillText(this.label, this.pos.x + this.width / 2, this.pos.y + this.height / 2);
+        ctx.shadowBlur = 0;
+    }
+}
+
+class Interactable {
+    constructor(x, y, type, label) {
+        this.pos = new Vector2(x, y);
+        this.type = type;
+        this.label = label;
+        this.width = 40;
+        this.height = 60;
+        this.glowPhase = Math.random() * Math.PI * 2;
+        this.isOn = false;
+        this.isPlaying = false;
+        this.pulsePhase = 0;
+    }
+
+    checkProximity(playerPos) {
+        return this.pos.dist(playerPos) < 60;
+    }
+
+    getPrompt() {
+        if (this.type === 'coffee') return 'Press E to Drink';
+        if (this.type === 'computer') return 'Press E to Work';
+        if (this.type === 'jukebox') return 'Press E to Play Music';
+        if (this.type === 'blueberry') return 'Press E to Collect';
+        return 'Press E';
+    }
+
+    interact(game) {
+        if (this.type === 'coffee') {
+            game.localPlayer.speedMultiplier = 1.8;
+            game.showFloatingText('CAFFEINE RUSH!', this.pos.x, this.pos.y - 30);
+            setTimeout(() => {
+                if (game.localPlayer) {
+                    game.localPlayer.speedMultiplier = 1.0;
+                }
+            }, 5000);
+            return false;
+            this.renderer.clear();
+            this.renderer.drawRoom(this.localPlayer.room);
+
+            if (this.localPlayer.room === 'skyview' && this.mazeGrid) {
+                this.renderer.drawMaze(this.mazeGrid, this.cellW, this.cellH);
+            }
+
+            const entities = [
+                this.localPlayer,
+                ...Object.values(this.remotePlayers).filter(p => p.room === this.localPlayer.room),
+                ...this.doors,
+                ...this.interactables
+            ];
+
+            this.renderer.drawEntities(entities);
+
+            this.renderer.ctx.save();
+            this.renderer.ctx.translate(-this.renderer.camera.x, -this.renderer.camera.y);
+            this.roseParticles.forEach(p => p.draw(this.renderer.ctx));
+            this.floatingTexts.forEach(t => t.draw(this.renderer.ctx));
+
+            // Draw music notes
+            this.musicNotes.forEach(n => {
+                this.renderer.ctx.save();
+                this.renderer.ctx.globalAlpha = n.life / 2;
+                this.renderer.ctx.fillStyle = '#ffd700';
+                this.renderer.ctx.font = 'bold 24px Arial';
+                this.renderer.ctx.textAlign = 'center';
+                this.renderer.ctx.fillText(n.symbol, n.pos.x, n.pos.y);
+                this.renderer.ctx.restore();
+            });
+
+            this.renderer.ctx.restore();
+
+            this.renderer.drawLighting(this.localPlayer);
+        }
+
+        updateInventory() {
+            const list = document.getElementById('inventory-list');
+            list.innerHTML = this.inventory.map(i => `<li>${i}</li>`).join('');
+        }
+
+        exitGame() {
+            if (this.localPlayer) {
+                this.switchRoom('office');
+                alert('Returned to Office (Main Lobby)');
+            }
+        }
+
+        handleAdminIconClick() {
+            if (this.isAdmin) {
+                this.toggleAdminPanel();
+            } else {
+                document.getElementById('password-modal').classList.remove('hidden');
+            }
+        }
+
+        verifyAdminPassword() {
+            const passwordInput = document.getElementById('admin-password');
+            if (passwordInput.value === '1234') {
+                this.isAdmin = true;
+                document.getElementById('password-modal').classList.add('hidden');
+                this.toggleAdminPanel();
+            } else {
+                alert('Incorrect Password!');
+            }
+        }
+
+        toggleAdminPanel() {
+            document.getElementById('admin-panel').classList.toggle('hidden');
+        }
+
+        executeAdminCmd(cmd, arg) {
+            if (!this.isAdmin) return;
+            console.log("Admin Cmd:", cmd, arg);
+
+            if (cmd === 'teleport_all') {
+                if (typeof firebase !== 'undefined') {
+                    firebase.database().ref('global/cmd').set({
+                        cmd: 'teleport',
+                        arg: arg,
+                        time: Date.now()
+                    });
+                }
+                this.switchRoom(arg);
+            } else if (cmd === 'rose_shower') {
+                if (this.localPlayer) {
+                    for (let i = 0; i < 50; i++) {
+                        setTimeout(() => {
+                            this.roseParticles.push(new RoseParticle(
+                                this.localPlayer.pos.x,
+                                this.localPlayer.pos.y
+                            ));
+                        }, i * 50);
+                    }
+                    alert('🌹 Rose Shower Activated!');
+                }
+            }
+        }
+    }
+
+// ============================================================================
+// GLOBAL INITIALIZATION
+// ============================================================================
+let game = null;
+
+(async function () {
+    try {
+        game = new Game();
+        await game.init();
+        window.game = game;
+
+        window.adminCmd = (cmd, arg) => game.executeAdminCmd(cmd, arg);
+
+        window.startGame = function (role) {
+            const nickname = document.getElementById('nickname').value.trim();
+            if (!nickname) {
+                alert("Please enter a name!");
+                return;
+            }
+            document.getElementById('start-screen').classList.add('hidden');
+            document.getElementById('hud').classList.remove('hidden');
+            game.start(nickname, role);
+        };
+
+        window.proceedToGenderSelection = function () {
+            const name = document.getElementById('nickname').value.trim();
+            if (!name) {
+                alert("Name required!");
+                return;
+            }
+            document.getElementById('name-step').classList.add('hidden');
+            document.getElementById('gender-step').classList.remove('hidden');
+        };
+
+    } catch (e) {
+        alert("CRITICAL ERROR: " + e.message);
+        console.error(e);
+    }
+})();

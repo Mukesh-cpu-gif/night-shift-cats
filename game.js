@@ -1,888 +1,1457 @@
-// Game State
-console.log("Game.js loading...");
-let playerId = localStorage.getItem('night_shift_player_id');
-if (!playerId) {
-    playerId = 'player_' + Math.random().toString(36).substr(2, 9);
-    localStorage.setItem('night_shift_player_id', playerId);
-}
+/**
+ * Night Shift Cats - Complete Game Engine
+ * Full Canvas-based Multiplayer Game with Interactive Objects
+ */
 
-let playerRole = null;
-let playerNickname = "Cat";
-let playerX = 400;
-let playerY = 300;
-let playerRoom = "office"; // office, study, hangout
-let speed = 4;
-let isGameRunning = false;
-let isAdmin = false; // Admin status
-let mazeWalls = [];
-
-
-// Admin Functions
-function handleAdminIconClick() {
-    if (isAdmin) {
-        toggleAdminPanel();
-    } else {
-        document.getElementById('password-modal').classList.remove('hidden');
+// ============================================================================
+// CONFIGURATION
+// ============================================================================
+const CONFIG = {
+    PLAYER_SPEED: 200,
+    TICK_RATE: 15,
+    WORLD_SIZE: 1200,
+    COLORS: {
+        OFFICE_BG: '#16213e',
+        STUDY_BG: '#2c1a1d',
+        HANGOUT_BG: '#1a237e',
+        MATCHI_BG: '#1a1a2e',
+        SKYVIEW_BG: '#000000',
+        BOY: '#4361ee',
+        GIRL: '#f72585',
+        WOOD: '#5d4037',
+        SCREEN: '#00ffff',
+        RUG: '#8b4513'
     }
-}
-
-function toggleAdminPanel() {
-    const panel = document.getElementById('admin-panel');
-    panel.classList.toggle('hidden');
-    if (!panel.classList.contains('hidden')) {
-        renderAdminPlayerList();
-    }
-}
-
-function verifyAdminPassword() {
-    const passwordInput = document.getElementById('admin-password');
-    if (passwordInput.value === '1234') {
-        isAdmin = true;
-        document.getElementById('password-modal').classList.add('hidden');
-        toggleAdminPanel();
-        document.getElementById('admin-icon').style.display = 'block';
-
-        // Start game if not already running
-        if (!isGameRunning) {
-            startScreen.style.display = 'none';
-            isGameRunning = true;
-            initGame();
-        }
-    } else {
-        alert('Incorrect Password!');
-    }
-}
-
-function renderAdminPlayerList() {
-    const list = document.getElementById('admin-player-list');
-    list.innerHTML = '';
-
-    Object.keys(players).forEach(id => {
-        const p = players[id].data;
-        const item = document.createElement('div');
-        item.className = 'player-item';
-        item.innerHTML = `
-            <div class="player-info">
-                <div class="player-role-icon" style="background: ${p.role === 'seeker' ? '#e74c3c' : '#3498db'}"></div>
-                <span>${p.nickname} (${p.role || 'spectator'})</span>
-            </div>
-            <button class="kick-btn" onclick="kickPlayer('${id}')">Kick</button>
-        `;
-        list.appendChild(item);
-    });
-}
-
-function kickPlayer(targetId) {
-    if (!isAdmin || !targetId) return;
-    db.ref('rooms/default/players/' + targetId).remove();
-    renderAdminPlayerList(); // Refresh list
-}
-
-function teleportAllPlayers(targetRoom) {
-    if (!isAdmin) return;
-    // Update all players' room in Firebase (requires backend rule changes or client-side loop)
-    // Since we don't have backend rules preventing this, we can try updating everyone.
-    // However, usually clients only update themselves. 
-    // A better approach for "Teleport All" without backend logic is to set a global "forceTeleport" flag in Firebase.
-    // For now, let's just update the local player and broadcast a chat message command that clients listen to?
-    // OR: Iterate and update everyone (might fail if rules are strict, but let's try).
-
-    Object.keys(players).forEach(id => {
-        db.ref('rooms/default/players/' + id).update({
-            room: targetRoom,
-            x: window.innerWidth / 2,
-            y: window.innerHeight / 2,
-            lastUpdated: firebase.database.ServerValue.TIMESTAMP
-        });
-    });
-}
-
-function updateGameSpeed(newSpeed) {
-    if (!isAdmin) return;
-    speed = parseInt(newSpeed);
-    // Broadcast speed change to all players (optional, for now just local admin speed)
-}
-
-// Timer State
-let personalTimerInterval = null;
-let personalTimerEndTime = 0;
-let isNearDesk = false;
-
-// Input State
-const keys = {
-    w: false, a: false, s: false, d: false,
-    ArrowUp: false, ArrowLeft: false, ArrowDown: false, ArrowRight: false
 };
 
-// Firebase References
-let db;
-let playersRef;
-let myPlayerRef;
-let chatRef;
-
-
-
-// DOM Elements
-const startScreen = document.getElementById('start-screen');
-const world = document.getElementById('world');
-const connectionStatus = document.getElementById('connection-status');
-const nicknameInput = document.getElementById('nickname');
-const personalTimerUi = document.getElementById('personal-timer-ui');
-const timerDisplay = document.getElementById('timer-display');
-const timerControls = document.getElementById('timer-controls');
-const stopBtn = document.getElementById('stop-btn');
-const chatUi = document.getElementById('chat-ui');
-const chatMessages = document.getElementById('chat-messages');
-const chatInput = document.getElementById('chat-input');
-
-// Clock Hands
-const hourHand = document.querySelector('.hand.hour');
-const minuteHand = document.querySelector('.hand.minute');
-const secondHand = document.querySelector('.hand.second');
-
-// Rooms
-const rooms = {
-    office: document.getElementById('room-office'),
-    study: document.getElementById('room-study'),
-    hangout: document.getElementById('room-hangout'),
-    matchi: document.getElementById('room-matchi'),
-    skyview: document.getElementById('room-skyview')
-};
-
-// Desk Zones (Study Room) - Dynamic
-function getDeskZones() {
-    const w = window.innerWidth;
-    const h = window.innerHeight;
-    return [
-        { x: w * 0.2, y: h * 0.25 }, // Top Left
-        { x: w * 0.8, y: h * 0.25 }, // Top Right
-        { x: w * 0.2, y: h * 0.75 }, // Bottom Left
-        { x: w * 0.8, y: h * 0.75 }  // Bottom Right
-    ];
+// ============================================================================
+// UTILITY CLASSES
+// ============================================================================
+class Vector2 {
+    constructor(x = 0, y = 0) {
+        this.x = x;
+        this.y = y;
+    }
+    add(v) { return new Vector2(this.x + v.x, this.y + v.y); }
+    sub(v) { return new Vector2(this.x - v.x, this.y - v.y); }
+    mult(n) { return new Vector2(this.x * n, this.y * n); }
+    mag() { return Math.sqrt(this.x * this.x + this.y * this.y); }
+    normalize() {
+        const m = this.mag();
+        return m === 0 ? new Vector2(0, 0) : new Vector2(this.x / m, this.y / m);
+    }
+    lerp(v, t) {
+        return new Vector2(
+            this.x + (v.x - this.x) * t,
+            this.y + (v.y - this.y) * t
+        );
+    }
+    dist(v) { return Math.sqrt(Math.pow(this.x - v.x, 2) + Math.pow(this.y - v.y, 2)); }
 }
 
-// Start Screen Flow Function
-function proceedToGenderSelection() {
-    try {
-        console.log("Proceeding to gender selection...");
-        const nameInput = document.getElementById('nickname');
-        if (!nameInput) {
-            alert("Error: Nickname input not found!");
-            return;
-        }
-
-        const name = nameInput.value.trim();
-        console.log("Nickname entered:", name);
-
-        if (!name) {
-            alert('Please enter your name first!');
-            return;
-        }
-
-        playerNickname = name;
-
-        // Hide name step, show gender step
-        const nameStep = document.getElementById('name-step');
-        const genderStep = document.getElementById('gender-step');
-
-        if (!nameStep || !genderStep) {
-            alert("Error: Steps not found in DOM");
-            return;
-        }
-
-        nameStep.classList.add('hidden');
-        genderStep.classList.remove('hidden');
-        console.log("Transition complete.");
-    } catch (e) {
-        alert("Error in proceedToGenderSelection: " + e.message);
-        console.error(e);
-    }
-}
-
-function startGame(role) {
-    const name = nicknameInput.value.trim();
-    if (name) playerNickname = name;
-    playerRole = role;
-
-    // Check for Admin Login
-    if (playerNickname.toLowerCase() === 'mukesh') {
-        document.getElementById('password-modal').classList.remove('hidden');
-        return; // Stop here, wait for password
+// ============================================================================
+// ASSET MANAGER
+// ============================================================================
+class AssetManager {
+    constructor() {
+        this.images = {};
+        this.loaded = false;
+        this.useFallback = false;
     }
 
-    // Check for unique username
-    if (typeof firebase !== 'undefined') {
-        const dbRef = firebase.database().ref('rooms/default/players');
-        dbRef.once('value').then((snapshot) => {
-            const players = snapshot.val() || {};
-            const isTaken = Object.values(players).some(p =>
-                p.nickname && p.nickname.toLowerCase() === playerNickname.toLowerCase()
-            );
+    loadImage(key, src) {
+        return new Promise((resolve) => {
+            const img = new Image();
+            const timeout = setTimeout(() => {
+                console.warn(`Asset ${key} timed out, using fallback`);
+                this.useFallback = true;
+                resolve(false);
+            }, 3000);
 
-            if (isTaken) {
-                alert('Username already taken! Please choose another one.');
-            } else {
-                startScreen.style.display = 'none';
-                isGameRunning = true;
-                initGame();
-            }
-        }).catch((error) => {
-            console.error("Error checking username:", error);
-            // Fallback to allow game start if check fails
-            startScreen.style.display = 'none';
-            isGameRunning = true;
-            initGame();
+            img.onload = () => {
+                clearTimeout(timeout);
+                this.images[key] = img;
+                console.log(`Loaded: ${key}`);
+                resolve(true);
+            };
+
+            img.onerror = (e) => {
+                clearTimeout(timeout);
+                console.error(`❌ FAILED TO LOAD ASSET: ${key} from ${src}`);
+                console.error('Error details:', e);
+                console.error('Check if file exists and path is correct!');
+                this.useFallback = true;
+                resolve(false);
+            };
+
+            img.src = src;
         });
-    } else {
-        // Fallback for local testing without Firebase
-        startScreen.style.display = 'none';
-        isGameRunning = true;
-        initGame();
+    }
+
+    async init() {
+        await this.loadImage('matchiRoom', 'matchi room.png');
+        this.loaded = true;
+    }
+
+    get(key) {
+        return this.images[key];
     }
 }
 
-// Initialize Game
-function initGame() {
-    // Prevent stuck at 0,0
-    if (playerX === 0 && playerY === 0) {
-        playerX = window.innerWidth / 2;
-        playerY = window.innerHeight / 2;
+// ============================================================================
+// INPUT MANAGER
+// ============================================================================
+class InputManager {
+    constructor() {
+        this.keys = {};
+        this.direction = new Vector2(0, 0);
+        this.interactPressed = false;
+
+        window.addEventListener('keydown', (e) => this.onKeyDown(e));
+        window.addEventListener('keyup', (e) => this.onKeyUp(e));
+        this.setupMobileControls();
     }
 
-    // Initialize Firebase
-    if (typeof firebase !== 'undefined') {
-        try {
-            if (!firebase.apps.length && typeof firebaseConfig !== 'undefined') {
-                firebase.initializeApp(firebaseConfig);
-            }
-
-            db = firebase.database();
-            playersRef = db.ref('rooms/default/players');
-            myPlayerRef = playersRef.child(playerId);
-            chatRef = db.ref('rooms/default/chat');
-
-            updateMyPosition();
-            myPlayerRef.onDisconnect().remove();
-            setupPlayerListeners();
-            setupChatListener();
-
-            // Listen for being kicked
-            myPlayerRef.on('value', (snapshot) => {
-                if (snapshot.val() === null && isGameRunning) {
-                    alert('You have been kicked by an admin!');
-                    location.reload();
+    onKeyDown(e) {
+        // ESC to exit game
+        if (e.key === 'Escape') {
+            if (window.game && window.game.localPlayer) {
+                if (confirm('Exit game and return to start screen?')) {
+                    window.game.exitGame();
                 }
-            });
+            }
+            return;
+        }
 
-            db.ref('.info/connected').on('value', (snap) => {
-                if (snap.val() === true) connectionStatus.classList.add('hidden');
-                else connectionStatus.classList.remove('hidden');
-            });
+        this.keys[e.key] = true;
+        if (e.key.toLowerCase() === 'e') this.interactPressed = true;
+        this.updateDirection();
+    }
 
-        } catch (e) {
-            console.error("Firebase error:", e);
-            alert("Firebase error. Check console.");
+    onKeyUp(e) {
+        this.keys[e.key] = false;
+        if (e.key.toLowerCase() === 'e') this.interactPressed = false;
+        this.updateDirection();
+    }
+
+    updateDirection() {
+        let x = 0, y = 0;
+        if (this.keys['w'] || this.keys['ArrowUp']) y -= 1;
+        if (this.keys['s'] || this.keys['ArrowDown']) y += 1;
+        if (this.keys['a'] || this.keys['ArrowLeft']) x -= 1;
+        if (this.keys['d'] || this.keys['ArrowRight']) x += 1;
+        this.direction = new Vector2(x, y).normalize();
+    }
+
+    setupMobileControls() {
+        const bindBtn = (id, key) => {
+            const btn = document.getElementById(id);
+            if (!btn) return;
+            const start = (e) => { e.preventDefault(); this.keys[key] = true; this.updateDirection(); };
+            const end = (e) => { e.preventDefault(); this.keys[key] = false; this.updateDirection(); };
+            btn.addEventListener('touchstart', start);
+            btn.addEventListener('touchend', end);
+            btn.addEventListener('mousedown', start);
+            btn.addEventListener('mouseup', end);
+        };
+
+        bindBtn('btn-up', 'ArrowUp');
+        bindBtn('btn-down', 'ArrowDown');
+        bindBtn('btn-left', 'ArrowLeft');
+        bindBtn('btn-right', 'ArrowRight');
+
+        const interactBtn = document.getElementById('btn-interact');
+        if (interactBtn) {
+            interactBtn.addEventListener('touchstart', (e) => { e.preventDefault(); this.interactPressed = true; });
+            interactBtn.addEventListener('touchend', (e) => { e.preventDefault(); this.interactPressed = false; });
+        }
+    }
+}
+
+// ============================================================================
+// NETWORK MANAGER
+// ============================================================================
+class NetworkManager {
+    constructor(game) {
+        this.game = game;
+        this.db = null;
+        this.playersRef = null;
+        this.myRef = null;
+        this.lastUpdate = 0;
+        this.updateInterval = 1000 / CONFIG.TICK_RATE;
+    }
+
+    init(playerId, playerData) {
+        if (typeof firebase === 'undefined') {
+            console.warn("Firebase not loaded. Offline mode.");
+            return;
+        }
+
+        this.db = firebase.database();
+        this.playersRef = this.db.ref('rooms/default/players');
+        this.myRef = this.playersRef.child(playerId);
+
+        this.myRef.set(playerData);
+        this.myRef.onDisconnect().remove();
+
+        this.playersRef.on('child_added', (snap) => this.game.addRemotePlayer(snap.key, snap.val()));
+        this.playersRef.on('child_changed', (snap) => this.game.updateRemotePlayer(snap.key, snap.val()));
+        this.playersRef.on('child_removed', (snap) => this.game.removeRemotePlayer(snap.key));
+
+        this.chatRef = this.db.ref('rooms/default/chat');
+        this.chatRef.limitToLast(10).on('child_added', (snap) => this.game.addChatMessage(snap.val()));
+
+        this.db.ref('.info/connected').on('value', (snap) => {
+            document.getElementById('connection-status').classList.toggle('hidden', snap.val());
+        });
+    }
+
+    update(player) {
+        if (!this.myRef) return;
+        const now = Date.now();
+        if (now - this.lastUpdate > this.updateInterval) {
+            this.myRef.update({
+                x: Math.round(player.pos.x),
+                y: Math.round(player.pos.y),
+                room: player.room,
+                lastUpdated: firebase.database.ServerValue.TIMESTAMP
+            });
+            this.lastUpdate = now;
         }
     }
 
-    // Start Clock
-    setInterval(updateClock, 1000);
-    updateClock();
+    sendChat() {
+        const input = document.getElementById('chat-input');
+        const msg = input.value.trim();
+        if (!msg) return;
 
-    // Initialize maze walls for collision detection
-    initMazeWalls();
-
-    requestAnimationFrame(gameLoop);
-}
-
-
-
-// Mobile Controls
-const btnUp = document.getElementById('btn-up');
-const btnDown = document.getElementById('btn-down');
-const btnLeft = document.getElementById('btn-left');
-const btnRight = document.getElementById('btn-right');
-
-function setupMobileBtn(btn, key) {
-    const start = (e) => { e.preventDefault(); keys[key] = true; };
-    const end = (e) => { e.preventDefault(); keys[key] = false; };
-
-    btn.addEventListener('touchstart', start);
-    btn.addEventListener('touchend', end);
-    btn.addEventListener('mousedown', start); // For desktop testing
-    btn.addEventListener('mouseup', end);
-    btn.addEventListener('mouseleave', end);
-}
-
-if (btnUp) {
-    setupMobileBtn(btnUp, 'ArrowUp');
-    setupMobileBtn(btnDown, 'ArrowDown');
-    setupMobileBtn(btnLeft, 'ArrowLeft');
-    setupMobileBtn(btnRight, 'ArrowRight');
-}
-
-// Music Logic
-const bgMusic = document.getElementById('bg-music');
-const musicBtn = document.getElementById('music-toggle');
-const vinylDisc = document.getElementById('vinyl-disc');
-
-function toggleMusic() {
-    if (bgMusic.paused) {
-        bgMusic.play().catch(e => console.log("Audio play failed:", e));
-        musicBtn.innerText = "🎵 Pause Music";
-        if (vinylDisc) vinylDisc.classList.add('spinning');
-    } else {
-        bgMusic.pause();
-        musicBtn.innerText = "🎵 Play Lofi";
-        if (vinylDisc) vinylDisc.classList.remove('spinning');
+        const name = this.game.localPlayer?.nickname || 'Guest';
+        this.chatRef.push({
+            name: name,
+            msg: msg,
+            timestamp: firebase.database.ServerValue.TIMESTAMP
+        });
+        input.value = '';
     }
 }
 
-// Game Loop
-let lastNetworkUpdate = 0;
-let lastCleanup = 0;
-
-function cleanupStalePlayers() {
-    const now = Date.now();
-    Object.keys(players).forEach(id => {
-        if (id === playerId) return; // Don't remove self
-
-        // If lastUpdated is older than 10 seconds, remove
-        if (players[id].data.lastUpdated && (now - players[id].data.lastUpdated > 10000)) {
-            removePlayerElement(id);
-        }
-    });
-}
-
-// Initialize maze walls using Recursive Backtracking (DFS)
-function initMazeWalls() {
-    if (playerRoom !== 'skyview') return;
-
-    const container = document.querySelector('.maze-container');
-    if (!container) return;
-    container.innerHTML = ''; // Clear old walls immediately
-
-    mazeWalls = []; // Reset collision array
-
-    const w = window.innerWidth;
-    const h = window.innerHeight;
-
-    // Grid settings
-    const cols = 16;
-    const rows = 9;
-    const cellW = w / cols;
-    const cellH = h / rows;
-
-    const grid = [];
-    const stack = [];
-
-    // Initialize grid
-    for (let r = 0; r < rows; r++) {
-        for (let c = 0; c < cols; c++) {
-            grid.push({
-                c, r,
-                walls: { top: true, right: true, bottom: true, left: true },
-                visited: false
-            });
-        }
+// ============================================================================
+// MAZE GENERATOR
+// ============================================================================
+class MazeGenerator {
+    constructor(cols, rows, seed) {
+        this.cols = cols;
+        this.rows = rows;
+        this.grid = [];
+        this.seed = seed;
+        this.random = this.seededRandom(seed);
     }
 
-    // Helper to get index
-    const index = (c, r) => {
-        if (c < 0 || r < 0 || c >= cols || r >= rows) return -1;
-        return c + r * cols;
-    };
+    seededRandom(seed) {
+        const m = 0x80000000;
+        const a = 1103515245;
+        const c = 12345;
+        let state = seed;
+        return function () {
+            state = (a * state + c) % m;
+            return state / (m - 1);
+        };
+    }
 
-    // Start DFS
-    let current = grid[0];
-    current.visited = true;
-    stack.push(current);
+    generate() {
+        for (let r = 0; r < this.rows; r++) {
+            for (let c = 0; c < this.cols; c++) {
+                this.grid.push({
+                    c, r,
+                    walls: { top: true, right: true, bottom: true, left: true },
+                    visited: false
+                });
+            }
+        }
 
-    while (stack.length > 0) {
-        current = stack.pop();
+        const stack = [];
+        let current = this.grid[0];
+        current.visited = true;
+        stack.push(current);
+
+        while (stack.length > 0) {
+            current = stack.pop();
+            const neighbors = this.getUnvisitedNeighbors(current);
+
+            if (neighbors.length > 0) {
+                stack.push(current);
+                const next = neighbors[Math.floor(this.random() * neighbors.length)];
+
+                if (current.c - next.c === 1) {
+                    current.walls.left = false;
+                    next.walls.right = false;
+                } else if (current.c - next.c === -1) {
+                    current.walls.right = false;
+                    next.walls.left = false;
+                } else if (current.r - next.r === 1) {
+                    current.walls.top = false;
+                    next.walls.bottom = false;
+                } else if (current.r - next.r === -1) {
+                    current.walls.bottom = false;
+                    next.walls.top = false;
+                }
+
+                next.visited = true;
+                stack.push(next);
+            }
+        }
+
+        return this.grid;
+    }
+
+    getUnvisitedNeighbors(cell) {
         const neighbors = [];
+        const index = (c, r) => {
+            if (c < 0 || r < 0 || c >= this.cols || r >= this.rows) return -1;
+            return c + r * this.cols;
+        };
 
-        const top = grid[index(current.c, current.r - 1)];
-        const right = grid[index(current.c + 1, current.r)];
-        const bottom = grid[index(current.c, current.r + 1)];
-        const left = grid[index(current.c - 1, current.r)];
+        const top = this.grid[index(cell.c, cell.r - 1)];
+        const right = this.grid[index(cell.c + 1, cell.r)];
+        const bottom = this.grid[index(cell.c, cell.r + 1)];
+        const left = this.grid[index(cell.c - 1, cell.r)];
 
         if (top && !top.visited) neighbors.push(top);
         if (right && !right.visited) neighbors.push(right);
         if (bottom && !bottom.visited) neighbors.push(bottom);
         if (left && !left.visited) neighbors.push(left);
 
-        if (neighbors.length > 0) {
-            stack.push(current);
-            const next = neighbors[Math.floor(Math.random() * neighbors.length)];
+        return neighbors;
+    }
+}
 
-            // Remove walls
-            if (current.c - next.c === 1) { // Left
-                current.walls.left = false;
-                next.walls.right = false;
-            } else if (current.c - next.c === -1) { // Right
-                current.walls.right = false;
-                next.walls.left = false;
-            } else if (current.r - next.r === 1) { // Top
-                current.walls.top = false;
-                next.walls.bottom = false;
-            } else if (current.r - next.r === -1) { // Bottom
-                current.walls.bottom = false;
-                next.walls.top = false;
-            }
-
-            next.visited = true;
-            stack.push(next);
-        }
+// ============================================================================
+// GAME ENTITIES
+// ============================================================================
+class Player {
+    constructor(id, data, isLocal = false) {
+        this.id = id;
+        this.nickname = data.nickname;
+        this.role = data.role;
+        this.room = data.room;
+        this.pos = new Vector2(data.x, data.y);
+        this.targetPos = new Vector2(data.x, data.y);
+        this.isLocal = isLocal;
+        this.color = this.role === 'boy' ? CONFIG.COLORS.BOY : CONFIG.COLORS.GIRL;
+        this.breathePhase = 0;
+        this.isMoving = false;
+        this.speedMultiplier = 1.0;
+        this.speedParticles = [];
     }
 
-    // Convert grid walls to collision rects and render
-    const thick = 6;
-    grid.forEach(cell => {
-        const x = cell.c * cellW;
-        const y = cell.r * cellH;
+    update(dt) {
+        if (!this.isLocal) {
+            const dist = this.pos.dist(this.targetPos);
+            if (dist > 200) {
+                this.pos = this.targetPos;
+            } else {
+                this.pos = this.pos.lerp(this.targetPos, Math.min(1, dt * 10));
+            }
+            this.isMoving = dist > 1;
+        }
 
-        if (cell.walls.top) addWall(x, y, cellW + thick, thick);
-        if (cell.walls.left) addWall(x, y, thick, cellH + thick);
-        if (cell.c === cols - 1 && cell.walls.right) addWall(x + cellW, y, thick, cellH + thick);
-        if (cell.r === rows - 1 && cell.walls.bottom) addWall(x, y + cellH, cellW + thick, thick);
-    });
+        this.breathePhase += dt * 2;
+
+        // Speed particles
+        if (this.speedMultiplier > 1 && this.isMoving) {
+            if (Math.random() < 0.3) {
+                this.speedParticles.push({
+                    pos: new Vector2(this.pos.x, this.pos.y),
+                    life: 0.5
+                });
+            }
+        }
+
+        this.speedParticles.forEach(p => p.life -= dt);
+        this.speedParticles = this.speedParticles.filter(p => p.life > 0);
+    }
+
+    draw(ctx) {
+        const breatheScale = this.isMoving ? 1 : 1 + Math.sin(this.breathePhase) * 0.05;
+
+        ctx.save();
+        ctx.translate(this.pos.x, this.pos.y);
+        ctx.scale(breatheScale, breatheScale);
+        ctx.translate(-this.pos.x, -this.pos.y);
+
+        // Shadow
+        ctx.fillStyle = 'rgba(0,0,0,0.3)';
+        ctx.beginPath();
+        ctx.ellipse(this.pos.x, this.pos.y + 20, 15, 5, 0, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Cat Head with gradient
+        const gradient = ctx.createRadialGradient(this.pos.x - 5, this.pos.y - 5, 5, this.pos.x, this.pos.y, 25);
+        gradient.addColorStop(0, this.color);
+        gradient.addColorStop(1, this.role === 'boy' ? '#1e3a8a' : '#9f1239');
+        ctx.fillStyle = gradient;
+        ctx.beginPath();
+        ctx.ellipse(this.pos.x, this.pos.y, 22, 20, 0, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Ears
+        ctx.beginPath();
+        ctx.moveTo(this.pos.x - 18, this.pos.y - 12);
+        ctx.lineTo(this.pos.x - 25, this.pos.y - 30);
+        ctx.lineTo(this.pos.x - 8, this.pos.y - 15);
+        ctx.fill();
+
+        ctx.beginPath();
+        ctx.moveTo(this.pos.x + 18, this.pos.y - 12);
+        ctx.lineTo(this.pos.x + 25, this.pos.y - 30);
+        ctx.lineTo(this.pos.x + 8, this.pos.y - 15);
+        ctx.fill();
+
+        // Eyes
+        ctx.fillStyle = '#000';
+        ctx.beginPath();
+        ctx.arc(this.pos.x - 7, this.pos.y, 2, 0, Math.PI * 2);
+        ctx.arc(this.pos.x + 7, this.pos.y, 2, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Whiskers
+        ctx.strokeStyle = '#fff';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(this.pos.x - 12, this.pos.y + 3); ctx.lineTo(this.pos.x - 28, this.pos.y);
+        ctx.moveTo(this.pos.x - 12, this.pos.y + 7); ctx.lineTo(this.pos.x - 28, this.pos.y + 7);
+        ctx.moveTo(this.pos.x + 12, this.pos.y + 3); ctx.lineTo(this.pos.x + 28, this.pos.y);
+        ctx.moveTo(this.pos.x + 12, this.pos.y + 7); ctx.lineTo(this.pos.x + 28, this.pos.y + 7);
+        ctx.stroke();
+
+        // Name Tag
+        ctx.shadowColor = 'rgba(0,0,0,0.8)';
+        ctx.shadowBlur = 4;
+        ctx.fillStyle = 'white';
+        ctx.font = 'bold 12px Arial';
+        ctx.textAlign = 'center';
+        ctx.fillText(this.nickname, this.pos.x, this.pos.y - 40);
+        ctx.shadowBlur = 0;
+
+        // Speed particles
+        if (this.speedMultiplier > 1) {
+            this.speedParticles.forEach(p => {
+                ctx.fillStyle = `rgba(255, 200, 0, ${p.life})`;
+                ctx.beginPath();
+                ctx.arc(p.pos.x, p.pos.y, 3, 0, Math.PI * 2);
+                ctx.fill();
+            });
+        }
+
+        ctx.restore();
+    }
 }
 
-function addWall(x, y, w, h) {
-    mazeWalls.push({ x, y, width: w, height: h });
+class Door {
+    constructor(x, y, targetRoom, label) {
+        this.pos = new Vector2(x, y);
+        this.width = 100;
+        this.height = 100;
+        this.targetRoom = targetRoom;
+        this.label = label;
+    }
 
-    const div = document.createElement('div');
-    div.className = 'maze-wall';
-    div.style.left = `${x}px`;
-    div.style.top = `${y}px`;
-    div.style.width = `${w}px`;
-    div.style.height = `${h}px`;
+    checkCollision(playerPos) {
+        return (playerPos.x > this.pos.x && playerPos.x < this.pos.x + this.width &&
+            playerPos.y > this.pos.y && playerPos.y < this.pos.y + this.height);
+    }
 
-    const container = document.querySelector('.maze-container');
-    if (container) container.appendChild(div);
+    draw(ctx) {
+        // Light spill effect (depth)
+        ctx.save();
+        ctx.globalAlpha = 0.3;
+        ctx.fillStyle = '#ffd700';
+        ctx.beginPath();
+        ctx.moveTo(this.pos.x + 10, this.pos.y + this.height);
+        ctx.lineTo(this.pos.x + this.width - 10, this.pos.y + this.height);
+        ctx.lineTo(this.pos.x + this.width + 20, this.pos.y + this.height + 40);
+        ctx.lineTo(this.pos.x - 20, this.pos.y + this.height + 40);
+        ctx.fill();
+        ctx.restore();
+
+        // Door body
+        ctx.fillStyle = CONFIG.COLORS.WOOD;
+        ctx.fillRect(this.pos.x, this.pos.y, this.width, this.height);
+
+        // Thick outer frame
+        ctx.strokeStyle = '#3e2723';
+        ctx.lineWidth = 6;
+        ctx.strokeRect(this.pos.x, this.pos.y, this.width, this.height);
+
+        // Doorknob
+        ctx.fillStyle = '#ffd700';
+        ctx.beginPath();
+        ctx.arc(this.pos.x + this.width - 15, this.pos.y + this.height / 2, 6, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Label inside door with shadow
+        ctx.shadowColor = 'black';
+        ctx.shadowBlur = 4;
+        ctx.fillStyle = 'white';
+        ctx.font = 'bold 14px Arial';
+        ctx.textAlign = 'center';
+        ctx.fillText(this.label, this.pos.x + this.width / 2, this.pos.y + 40);
+        ctx.shadowBlur = 0;
+    }
 }
 
-// Check collision with maze walls
-function checkMazeCollision(newX, newY) {
-    if (playerRoom !== 'skyview') return false;
+class Interactable {
+    constructor(x, y, type, label) {
+        this.pos = new Vector2(x, y);
+        this.type = type;
+        this.label = label;
+        this.width = 40;
+        this.height = 60;
+        this.glowPhase = Math.random() * Math.PI * 2;
+        this.isOn = false;
+        this.isPlaying = false;
+        this.pulsePhase = 0;
+    }
 
-    const playerSize = 25;
-    const hitBox = 15;
-    const offset = (playerSize - hitBox) / 2;
+    checkProximity(playerPos) {
+        return this.pos.dist(playerPos) < 60;
+    }
 
-    const testX = newX + offset;
-    const testY = newY + offset;
+    getPrompt() {
+        if (this.type === 'coffee') return 'Press E to Drink';
+        if (this.type === 'computer') return 'Press E to Work';
+        if (this.type === 'jukebox') return 'Press E to Play Music';
+        if (this.type === 'blueberry') return 'Press E to Collect';
+        return 'Press E';
+    }
 
-    for (const wall of mazeWalls) {
-        if (testX < wall.x + wall.width &&
-            testX + hitBox > wall.x &&
-            testY < wall.y + wall.height &&
-            testY + hitBox > wall.y) {
+    interact(game) {
+        if (this.type === 'coffee') {
+            game.localPlayer.speedMultiplier = 1.8;
+            game.showFloatingText('CAFFEINE RUSH!', this.pos.x, this.pos.y - 30);
+            setTimeout(() => {
+                if (game.localPlayer) {
+                    game.localPlayer.speedMultiplier = 1.0;
+                }
+            }, 5000);
+            return false;
+        } else if (this.type === 'computer') {
+            this.isOn = !this.isOn;
+            return false;
+        } else if (this.type === 'jukebox') {
+            this.isPlaying = !this.isPlaying;
+            if (this.isPlaying) {
+                game.bgm.play().catch(e => console.log("Audio play failed:", e));
+            } else {
+                game.bgm.pause();
+            }
+            return false;
+        } else if (this.type === 'blueberry') {
             return true;
         }
+        return false;
     }
-    return false;
-}
 
-function gameLoop() {
-    if (!isGameRunning) return;
+    draw(ctx) {
+        if (this.type === 'blueberry') {
+            this.glowPhase += 0.05;
+            const glowRadius = 20 + Math.sin(this.glowPhase) * 5;
+            const glowGradient = ctx.createRadialGradient(this.pos.x, this.pos.y, 12, this.pos.x, this.pos.y, glowRadius);
+            glowGradient.addColorStop(0, 'rgba(67, 97, 238, 0.3)');
+            glowGradient.addColorStop(1, 'rgba(67, 97, 238, 0)');
+            ctx.fillStyle = glowGradient;
+            ctx.beginPath();
+            ctx.arc(this.pos.x, this.pos.y, glowRadius, 0, Math.PI * 2);
+            ctx.fill();
 
-    try {
-        let dx = 0;
-        let dy = 0;
+            const berryGradient = ctx.createRadialGradient(this.pos.x - 3, this.pos.y - 3, 2, this.pos.x, this.pos.y, 12);
+            berryGradient.addColorStop(0, '#6b8aff');
+            berryGradient.addColorStop(1, '#2d4bb5');
+            ctx.fillStyle = berryGradient;
+            ctx.beginPath();
+            ctx.arc(this.pos.x, this.pos.y, 12, 0, Math.PI * 2);
+            ctx.fill();
 
-        // Movement Logic
-        if (document.activeElement !== chatInput) {
-            if (keys.w || keys.ArrowUp) dy -= speed;
-            if (keys.s || keys.ArrowDown) dy += speed;
-            if (keys.a || keys.ArrowLeft) dx -= speed;
-            if (keys.d || keys.ArrowRight) dx += speed;
+            ctx.fillStyle = '#2ecc71';
+            ctx.beginPath();
+            ctx.ellipse(this.pos.x, this.pos.y - 10, 5, 3, Math.PI / 4, 0, Math.PI * 2);
+            ctx.fill();
+        } else if (this.type === 'coffee') {
+            // Coffee machine
+            ctx.fillStyle = '#cfd8dc'; // Silver
+            ctx.fillRect(this.pos.x - 20, this.pos.y - 30, 40, 60);
 
-            if (dx !== 0 && dy !== 0) {
-                dx *= 0.707;
-                dy *= 0.707;
+            ctx.fillStyle = '#3e2723';
+            ctx.fillRect(this.pos.x - 15, this.pos.y + 10, 30, 20);
+
+            ctx.fillStyle = '#8d6e63';
+            ctx.beginPath();
+            ctx.arc(this.pos.x, this.pos.y - 10, 8, 0, Math.PI * 2);
+            ctx.fill();
+
+            // Animated Steam
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.4)';
+            const time = Date.now() / 200;
+            for (let i = 0; i < 3; i++) {
+                const offset = i * 10;
+                const y = this.pos.y - 40 - ((time * 10 + offset) % 30);
+                const x = this.pos.x + Math.sin(time + i) * 5;
+                ctx.beginPath();
+                ctx.arc(x, y, 3, 0, Math.PI * 2);
+                ctx.fill();
             }
+        } else if (this.type === 'computer') {
+            // Monitor
+            ctx.fillStyle = '#424242';
+            ctx.fillRect(this.pos.x - 25, this.pos.y - 20, 50, 35);
 
-            // Calculate new position
-            const newX = playerX + dx;
-            const newY = playerY + dy;
-
-            // Check maze wall collision with sliding
-            if (playerRoom === 'skyview') {
-                const canMoveX = !checkMazeCollision(newX, playerY);
-                const canMoveY = !checkMazeCollision(playerX, newY);
-                const canMoveBoth = !checkMazeCollision(newX, newY);
-
-                if (canMoveBoth) {
-                    playerX = newX;
-                    playerY = newY;
-                } else if (canMoveX) {
-                    playerX = newX;
-                } else if (canMoveY) {
-                    playerY = newY;
-                }
+            if (this.isOn) {
+                ctx.fillStyle = '#00ff00';
+                ctx.font = '10px monospace';
+                ctx.textAlign = 'center';
+                ctx.fillText('10101', this.pos.x, this.pos.y - 10);
+                ctx.fillText('01010', this.pos.x, this.pos.y);
             } else {
-                playerX = newX;
-                playerY = newY;
+                ctx.fillStyle = '#000';
+                ctx.fillRect(this.pos.x - 22, this.pos.y - 17, 44, 29);
             }
 
-            // Dynamic Bounds Checking
-            const maxX = window.innerWidth - 25;
-            const maxY = window.innerHeight - 25;
+            ctx.fillStyle = '#616161';
+            ctx.fillRect(this.pos.x - 5, this.pos.y + 15, 10, 10);
+        } else if (this.type === 'jukebox') {
+            this.pulsePhase += 0.1;
+            const scale = this.isPlaying ? 1 + Math.sin(this.pulsePhase) * 0.1 : 1;
 
-            if (playerX < 0) playerX = 0;
-            if (playerY < 0) playerY = 0;
-            if (playerX > maxX) playerX = maxX;
-            if (playerY > maxY) playerY = maxY;
-        }
+            ctx.save();
+            ctx.translate(this.pos.x, this.pos.y);
+            ctx.scale(scale, scale);
+            ctx.translate(-this.pos.x, -this.pos.y);
 
-        checkRoomTransitions();
-        checkDeskProximity();
-        renderMyPlayer();
+            const grad = ctx.createLinearGradient(this.pos.x - 30, this.pos.y - 40, this.pos.x + 30, this.pos.y + 40);
+            grad.addColorStop(0, '#ff6b9d');
+            grad.addColorStop(0.5, '#c44569');
+            grad.addColorStop(1, '#8e44ad');
+            ctx.fillStyle = grad;
+            ctx.fillRect(this.pos.x - 30, this.pos.y - 40, 60, 80);
 
-        // Update network position more frequently if moving
-        const now = Date.now();
-        const isMoving = dx !== 0 || dy !== 0;
-        const updateInterval = isMoving ? 50 : 100;
+            if (this.isPlaying) {
+                ctx.fillStyle = '#ffd700';
+                for (let i = 0; i < 3; i++) {
+                    ctx.beginPath();
+                    ctx.arc(this.pos.x - 15 + i * 15, this.pos.y - 10, 5, 0, Math.PI * 2);
+                    ctx.fill();
+                }
+            }
 
-        if (now - lastNetworkUpdate > updateInterval) {
-            updateMyPosition();
-            lastNetworkUpdate = now;
-        }
-
-        // Cleanup stale players every 1 second
-        if (now - lastCleanup > 1000) {
-            cleanupStalePlayers();
-            lastCleanup = now;
-        }
-
-        updatePersonalTimer();
-
-    } catch (e) {
-        console.error("Game Loop Error:", e);
-    }
-
-    requestAnimationFrame(gameLoop);
-}
-
-// Safe Spawn Logic
-function getSafeSpawn() {
-    const w = window.innerWidth;
-    const h = window.innerHeight;
-    const cols = 16;
-    const rows = 9;
-    const cellW = w / cols;
-    const cellH = h / rows;
-
-    // Center of first cell (0,0)
-    return { x: cellW / 2, y: cellH / 2 };
-}
-
-function checkRoomTransitions() {
-    const w = window.innerWidth;
-    const h = window.innerHeight;
-
-    // Office -> Study (left door: top 40%, left 2%)
-    if (playerRoom === 'office' && playerX < w * 0.05 && playerY > h * 0.35 && playerY < h * 0.55) {
-        switchRoom('study', w * 0.5, h * 0.5);
-    }
-    // Office -> Hangout (right door: top 40%, right 2%)
-    else if (playerRoom === 'office' && playerX > w * 0.95 && playerY > h * 0.35 && playerY < h * 0.55) {
-        switchRoom('hangout', w * 0.5, h * 0.5);
-    }
-    // Office -> Matchi (top door: top 2%, center)
-    else if (playerRoom === 'office' && playerY < h * 0.05 && playerX > w * 0.4 && playerX < w * 0.6) {
-        switchRoom('matchi', w * 0.5, h * 0.8);
-    }
-    // Office -> Skyview (bottom-right door: bottom 10%, right 5%)
-    else if (playerRoom === 'office' && playerY > h * 0.85 && playerX > w * 0.85) {
-        // Spawn in center to avoid immediate exit loop
-        switchRoom('skyview', w * 0.5, h * 0.5);
-    }
-
-    // Back to Office (from any room)
-    else if (playerRoom !== 'office' && playerRoom !== 'skyview') {
-        // Bottom center door
-        if (playerY > h * 0.9 && playerX > w * 0.4 && playerX < w * 0.6) {
-            switchRoom('office', w * 0.5, h * 0.5);
+            ctx.restore();
         }
     }
-    // Back from Skyview (Top Left)
-    else if (playerRoom === 'skyview' && playerX < 50 && playerY < 50) {
-        switchRoom('office', w * 0.9, h * 0.9);
+}
+
+class RoseParticle {
+    constructor(x, y) {
+        this.pos = new Vector2(x + (Math.random() - 0.5) * 100, y - 50);
+        this.vel = new Vector2((Math.random() - 0.5) * 2, Math.random() * 2 + 1);
+        this.rotation = Math.random() * Math.PI * 2;
+        this.rotationSpeed = (Math.random() - 0.5) * 0.2;
+        this.life = 1.0;
+        this.fadeSpeed = 0.01;
+        this.size = 15 + Math.random() * 10;
+        this.color = Math.random() > 0.5 ? '#ff6b9d' : '#ff1744';
+    }
+
+    update(dt) {
+        this.pos.x += this.vel.x;
+        this.pos.y += this.vel.y;
+        this.rotation += this.rotationSpeed;
+        this.life -= this.fadeSpeed;
+        this.vel.x += Math.sin(Date.now() / 500) * 0.05;
+    }
+
+    draw(ctx) {
+        ctx.save();
+        ctx.globalAlpha = this.life;
+        ctx.translate(this.pos.x, this.pos.y);
+        ctx.rotate(this.rotation);
+
+        ctx.fillStyle = this.color;
+        ctx.beginPath();
+        ctx.ellipse(0, 0, this.size, this.size * 0.7, 0, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.3)';
+        ctx.beginPath();
+        ctx.ellipse(-this.size / 3, 0, this.size / 3, this.size / 2, 0, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.restore();
     }
 }
 
-function switchRoom(newRoom, newX, newY) {
-    // Handle percentage strings if passed
-    if (typeof newX === 'string' && newX.includes('%')) {
-        newX = (parseFloat(newX) / 100) * window.innerWidth;
-    }
-    if (typeof newY === 'string' && newY.includes('%')) {
-        newY = (parseFloat(newY) / 100) * window.innerHeight;
-    }
-
-    playerRoom = newRoom;
-    playerX = newX;
-    playerY = newY;
-
-    Object.values(rooms).forEach(el => el.classList.add('hidden'));
-    rooms[newRoom].classList.remove('hidden');
-
-    if (newRoom === 'hangout') chatUi.classList.remove('hidden');
-    else chatUi.classList.add('hidden');
-
-    if (newRoom !== 'study') {
-        personalTimerUi.classList.add('hidden');
+class FloatingText {
+    constructor(text, x, y) {
+        this.text = text;
+        this.pos = new Vector2(x, y);
+        this.life = 2.0;
+        this.vel = new Vector2(0, -50);
     }
 
-    // Re-init maze walls if entering skyview
-    if (newRoom === 'skyview') {
-        initMazeWalls();
+    update(dt) {
+        this.pos.y += this.vel.y * dt;
+        this.life -= dt;
     }
 
-    refreshPlayerVisibility();
+    draw(ctx) {
+        ctx.save();
+        ctx.globalAlpha = this.life / 2;
+        ctx.fillStyle = '#ffd700';
+        ctx.font = 'bold 20px Arial';
+        ctx.textAlign = 'center';
+        ctx.strokeStyle = '#000';
+        ctx.lineWidth = 3;
+        ctx.strokeText(this.text, this.pos.x, this.pos.y);
+        ctx.fillText(this.text, this.pos.x, this.pos.y);
+        ctx.restore();
+    }
 }
 
-function selectMazeRole(role) {
-    playerRole = role;
-    updateMyPosition(); // Sync to Firebase
-
-    // Update UI
-    const selectionUi = document.getElementById('maze-role-selection');
-    const statusUi = document.getElementById('maze-status');
-    const roleDisplay = document.getElementById('maze-role-display');
-
-    if (selectionUi) selectionUi.classList.add('hidden');
-    if (statusUi) statusUi.classList.remove('hidden');
-    if (roleDisplay) roleDisplay.innerText = `You are a: ${role.toUpperCase()}`;
-}
-
-function checkDeskProximity() {
-    if (playerRoom !== 'study') {
-        isNearDesk = false;
-        return;
+class MusicNote {
+    constructor(x, y) {
+        this.pos = new Vector2(x + (Math.random() - 0.5) * 60, y - 50);
+        this.vel = new Vector2((Math.random() - 0.5) * 50, -100 - Math.random() * 50);
+        this.life = 1.5;
+        this.symbol = Math.random() > 0.5 ? '♪' : '♫';
+        this.size = 20 + Math.random() * 10;
     }
 
-    let near = false;
-    const zones = getDeskZones();
+    update(dt) {
+        this.pos = this.pos.add(this.vel.mult(dt));
+        this.life -= dt;
+        this.vel.x += Math.sin(Date.now() / 200) * 2;
+    }
 
-    for (const zone of zones) {
-        const dist = Math.sqrt(Math.pow(playerX - zone.x, 2) + Math.pow(playerY - zone.y, 2));
-        if (dist < 100) {
-            near = true;
-            break;
+    draw(ctx) {
+        ctx.save();
+        ctx.globalAlpha = Math.max(0, this.life);
+        ctx.fillStyle = `hsl(${Date.now() / 10 % 360}, 100%, 70%)`;
+        ctx.font = `bold ${this.size}px Arial`;
+        ctx.fillText(this.symbol, this.pos.x, this.pos.y);
+        ctx.restore();
+    }
+}
+
+// ============================================================================
+// RENDERER
+// ============================================================================
+class Renderer {
+    constructor(canvasId, assets) {
+        this.canvas = document.getElementById(canvasId);
+        this.ctx = this.canvas.getContext('2d');
+        this.assets = assets;
+        this.camera = new Vector2(0, 0);
+        this.discoTime = 0;
+        this.resize();
+        window.addEventListener('resize', () => this.resize());
+    }
+
+    resize() {
+        this.canvas.width = window.innerWidth;
+        this.canvas.height = window.innerHeight;
+    }
+
+    updateCamera(targetPos) {
+        const center = new Vector2(this.canvas.width / 2, this.canvas.height / 2);
+        const target = targetPos.sub(center);
+        this.camera = this.camera.lerp(target, 0.1);
+    }
+
+    clear() {
+        this.ctx.fillStyle = '#000';
+        this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
+    }
+
+    drawRoom(room, isPartyTime = false) {
+        this.ctx.save();
+        this.ctx.translate(-this.camera.x, -this.camera.y);
+
+        const W = CONFIG.WORLD_SIZE;
+
+        if (room === 'office') {
+            this.ctx.fillStyle = CONFIG.COLORS.OFFICE_BG;
+            this.ctx.fillRect(0, 0, W, W);
+
+            this.ctx.strokeStyle = 'rgba(255,255,255,0.03)';
+            this.ctx.lineWidth = 1;
+            for (let x = 0; x < W; x += 50) {
+                for (let y = 0; y < W; y += 50) {
+                    this.ctx.strokeRect(x, y, 50, 50);
+                }
+            }
+
+            const rugGrad = this.ctx.createRadialGradient(W / 2, W / 2, 50, W / 2, W / 2, 150);
+            rugGrad.addColorStop(0, '#a0522d');
+            rugGrad.addColorStop(1, '#654321');
+            this.ctx.fillStyle = rugGrad;
+            this.ctx.beginPath();
+            this.ctx.arc(W / 2, W / 2, 150, 0, Math.PI * 2);
+            this.ctx.fill();
+
+            const desks = [
+                [100, 100], [W - 200, 100], [100, W - 200], [W - 200, W - 200]
+            ];
+            desks.forEach(([x, y]) => {
+                this.ctx.shadowColor = 'rgba(0,0,0,0.5)';
+                this.ctx.shadowBlur = 15;
+                this.ctx.shadowOffsetX = 5;
+                this.ctx.shadowOffsetY = 5;
+
+                const deskGrad = this.ctx.createLinearGradient(x, y, x, y + 80);
+                deskGrad.addColorStop(0, '#6d4c41');
+                deskGrad.addColorStop(1, '#3e2723');
+                this.ctx.fillStyle = deskGrad;
+                this.ctx.fillRect(x, y, 100, 80);
+
+                this.ctx.shadowBlur = 0;
+
+                this.ctx.shadowColor = CONFIG.COLORS.SCREEN;
+                this.ctx.shadowBlur = 20;
+                const screenGrad = this.ctx.createLinearGradient(x + 20, y + 10, x + 80, y + 50);
+                screenGrad.addColorStop(0, '#00ffff');
+                screenGrad.addColorStop(1, '#0088aa');
+                this.ctx.fillStyle = screenGrad;
+                this.ctx.fillRect(x + 20, y + 10, 60, 40);
+                this.ctx.shadowBlur = 0;
+
+                this.ctx.fillStyle = '#fff';
+                this.ctx.fillRect(x + 5, y + 55, 20, 15);
+                this.ctx.fillRect(x + 30, y + 60, 15, 12);
+
+                this.ctx.fillStyle = '#ffd700';
+                this.ctx.beginPath();
+                this.ctx.arc(x + 85, y + 65, 8, 0, Math.PI * 2);
+                this.ctx.fill();
+            });
+
+        } else if (room === 'study') {
+            this.ctx.fillStyle = CONFIG.COLORS.STUDY_BG;
+            this.ctx.fillRect(0, 0, W, W);
+
+            this.ctx.strokeStyle = 'rgba(0,0,0,0.1)';
+            this.ctx.lineWidth = 2;
+            for (let y = 0; y < W; y += 20) {
+                this.ctx.beginPath();
+                this.ctx.moveTo(0, y);
+                this.ctx.lineTo(W, y + Math.sin(y / 50) * 10);
+                this.ctx.stroke();
+            }
+
+            const tables = [
+                [200, 200], [W - 300, 200], [200, W - 300], [W - 300, W - 300]
+            ];
+            tables.forEach(([x, y]) => {
+                this.ctx.shadowColor = 'rgba(0,0,0,0.6)';
+                this.ctx.shadowBlur = 20;
+                this.ctx.shadowOffsetX = 8;
+                this.ctx.shadowOffsetY = 8;
+
+                const tableGrad = this.ctx.createRadialGradient(x + 60, y + 50, 20, x + 60, y + 50, 100);
+                tableGrad.addColorStop(0, '#8d6e63');
+                tableGrad.addColorStop(1, '#4e342e');
+                this.ctx.fillStyle = tableGrad;
+                this.ctx.fillRect(x, y, 120, 100);
+
+                this.ctx.shadowBlur = 0;
+
+                const colors = [
+                    ['#e74c3c', '#c0392b'],
+                    ['#3498db', '#2980b9'],
+                    ['#2ecc71', '#27ae60'],
+                    ['#f39c12', '#e67e22']
+                ];
+                for (let i = 0; i < 4; i++) {
+                    const bookGrad = this.ctx.createLinearGradient(x + 10 + i * 25, y + 20, x + 30 + i * 25, y + 50);
+                    bookGrad.addColorStop(0, colors[i][0]);
+                    bookGrad.addColorStop(1, colors[i][1]);
+                    this.ctx.fillStyle = bookGrad;
+                    this.ctx.fillRect(x + 10 + i * 25, y + 20, 20, 30);
+
+                    this.ctx.fillStyle = 'rgba(255,255,255,0.3)';
+                    this.ctx.fillRect(x + 10 + i * 25, y + 20, 3, 30);
+                }
+            });
+
+        } else if (room === 'hangout') {
+            const bgGrad = this.ctx.createLinearGradient(0, 0, 0, W);
+            bgGrad.addColorStop(0, '#1a237e');
+            bgGrad.addColorStop(1, '#0d1642');
+            this.ctx.fillStyle = bgGrad;
+            this.ctx.fillRect(0, 0, W, W);
+
+            // Disco Lights
+            if (isPartyTime) {
+                this.ctx.save();
+                this.ctx.globalCompositeOperation = 'overlay';
+                const time = Date.now() / 1000;
+                for (let i = 0; i < 5; i++) {
+                    const angle = time + i * (Math.PI * 2 / 5);
+                    const x = W / 2 + Math.cos(angle) * 300;
+                    const y = W / 2 + Math.sin(angle) * 300;
+
+                    const grad = this.ctx.createRadialGradient(x, y, 0, x, y, 200);
+                    grad.addColorStop(0, `hsla(${i * 72}, 100%, 50%, 0.5)`);
+                    grad.addColorStop(1, 'transparent');
+
+                    this.ctx.fillStyle = grad;
+                    this.ctx.beginPath();
+                    this.ctx.arc(x, y, 200, 0, Math.PI * 2);
+                    this.ctx.fill();
+                }
+                this.ctx.restore();
+            }
+
+            this.ctx.shadowColor = 'rgba(0,0,0,0.7)';
+            this.ctx.shadowBlur = 25;
+            const barGrad = this.ctx.createLinearGradient(100, 50, 100, 130);
+            barGrad.addColorStop(0, '#8d6e63');
+            barGrad.addColorStop(0.5, '#5d4037');
+            barGrad.addColorStop(1, '#3e2723');
+            this.ctx.fillStyle = barGrad;
+            this.ctx.fillRect(100, 50, W - 200, 80);
+            this.ctx.shadowBlur = 0;
+
+            const tables = [[300, 400], [W / 2, 500], [W - 300, 400]];
+            tables.forEach(([x, y]) => {
+                this.ctx.shadowColor = 'rgba(0,0,0,0.6)';
+                this.ctx.shadowBlur = 20;
+
+                const tableGrad = this.ctx.createRadialGradient(x, y, 20, x, y, 60);
+                tableGrad.addColorStop(0, '#a0522d');
+                tableGrad.addColorStop(1, '#654321');
+                this.ctx.fillStyle = tableGrad;
+                this.ctx.beginPath();
+                this.ctx.arc(x, y, 60, 0, Math.PI * 2);
+                this.ctx.fill();
+
+                this.ctx.shadowBlur = 0;
+            });
+
+        } else if (room === 'matchi') {
+            const img = this.assets.get('matchiRoom');
+            if (img && !this.assets.useFallback) {
+                this.ctx.drawImage(img, 0, 0, W, W);
+            } else {
+                this.ctx.fillStyle = CONFIG.COLORS.MATCHI_BG;
+                this.ctx.fillRect(0, 0, W, W);
+
+                this.discoTime += 0.15;
+                const gridSize = 100;
+                for (let x = 0; x < W; x += gridSize) {
+                    for (let y = 0; y < W; y += gridSize) {
+                        const hue = (x + y + this.discoTime * 100) % 360;
+                        const brightness = 40 + Math.sin(this.discoTime + x / 100) * 20;
+                        this.ctx.fillStyle = `hsl(${hue}, 80%, ${brightness}%)`;
+                        this.ctx.fillRect(x, y, gridSize - 2, gridSize - 2);
+                    }
+                }
+
+                const ballGrad = this.ctx.createRadialGradient(W / 2 - 10, 90, 10, W / 2, 100, 40);
+                ballGrad.addColorStop(0, '#ffffff');
+                ballGrad.addColorStop(1, '#888888');
+                this.ctx.fillStyle = ballGrad;
+                this.ctx.beginPath();
+                this.ctx.arc(W / 2, 100, 40, 0, Math.PI * 2);
+                this.ctx.fill();
+
+                this.ctx.strokeStyle = '#fff';
+                this.ctx.lineWidth = 2;
+                for (let i = 0; i < 8; i++) {
+                    const angle = (i / 8) * Math.PI * 2;
+                    this.ctx.beginPath();
+                    this.ctx.moveTo(W / 2, 100);
+                    this.ctx.lineTo(W / 2 + Math.cos(angle) * 40, 100 + Math.sin(angle) * 40);
+                    this.ctx.stroke();
+                }
+            }
+
+        } else if (room === 'skyview') {
+            this.ctx.fillStyle = CONFIG.COLORS.SKYVIEW_BG;
+            this.ctx.fillRect(0, 0, W, W);
+        }
+
+        this.ctx.restore();
+    }
+
+    drawMaze(mazeGrid, cellW, cellH) {
+        this.ctx.save();
+        this.ctx.translate(-this.camera.x, -this.camera.y);
+
+        this.ctx.strokeStyle = '#fff';
+        this.ctx.lineWidth = 3;
+
+        mazeGrid.forEach(cell => {
+            const x = cell.c * cellW;
+            const y = cell.r * cellH;
+
+            if (cell.walls.top) {
+                this.ctx.beginPath();
+                this.ctx.moveTo(x, y);
+                this.ctx.lineTo(x + cellW, y);
+                this.ctx.stroke();
+            }
+            if (cell.walls.right) {
+                this.ctx.beginPath();
+                this.ctx.moveTo(x + cellW, y);
+                this.ctx.lineTo(x + cellW, y + cellH);
+                this.ctx.stroke();
+            }
+            if (cell.walls.bottom) {
+                this.ctx.beginPath();
+                this.ctx.moveTo(x, y + cellH);
+                this.ctx.lineTo(x + cellW, y + cellH);
+                this.ctx.stroke();
+            }
+            if (cell.walls.left) {
+                this.ctx.beginPath();
+                this.ctx.moveTo(x, y);
+                this.ctx.lineTo(x, y + cellH);
+                this.ctx.stroke();
+            }
+        });
+
+        this.ctx.restore();
+    }
+
+    drawEntities(entities) {
+        this.ctx.save();
+        this.ctx.translate(-this.camera.x, -this.camera.y);
+        entities.sort((a, b) => a.pos.y - b.pos.y);
+        entities.forEach(e => e.draw(this.ctx));
+        this.ctx.restore();
+    }
+
+    drawLighting(player) {
+        const centerX = player.pos.x - this.camera.x;
+        const centerY = player.pos.y - this.camera.y;
+
+        const lanternGrad = this.ctx.createRadialGradient(
+            centerX, centerY, 50,
+            centerX, centerY, 400
+        );
+        lanternGrad.addColorStop(0, 'rgba(0,0,0,0)');
+        lanternGrad.addColorStop(0.5, 'rgba(0,0,0,0.3)');
+        lanternGrad.addColorStop(1, 'rgba(0,0,0,0.7)');
+
+        this.ctx.fillStyle = lanternGrad;
+        this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
+
+        const vignetteGrad = this.ctx.createRadialGradient(
+            this.canvas.width / 2, this.canvas.height / 2, this.canvas.width * 0.3,
+            this.canvas.width / 2, this.canvas.height / 2, this.canvas.width * 0.7
+        );
+        vignetteGrad.addColorStop(0, 'rgba(0,0,0,0)');
+        vignetteGrad.addColorStop(1, 'rgba(0,0,0,0.5)');
+
+        this.ctx.fillStyle = vignetteGrad;
+        this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
+    }
+}
+
+// ============================================================================
+// MAIN GAME CLASS
+// ============================================================================
+class Game {
+    constructor() {
+        this.playerId = localStorage.getItem('night_shift_player_id') || 'player_' + Math.random().toString(36).substr(2, 9);
+        localStorage.setItem('night_shift_player_id', this.playerId);
+
+        this.assets = new AssetManager();
+        this.renderer = null;
+        this.input = new InputManager();
+        this.network = new NetworkManager(this);
+
+        this.localPlayer = null;
+        this.remotePlayers = {};
+        this.doors = [];
+        this.interactables = [];
+        this.inventory = [];
+        this.isAdmin = false;
+        this.roseParticles = [];
+        this.musicNotes = [];
+        this.floatingTexts = [];
+
+        // Audio System
+        this.bgm = new Audio('https://cdn.pixabay.com/audio/2022/05/27/audio_1808fbf07a.mp3');
+        this.bgm.loop = true;
+
+        this.mazeGrid = null;
+        this.cellW = 0;
+        this.cellH = 0;
+
+        this.lastTime = 0;
+    }
+
+    async init() {
+        await this.assets.init();
+        this.renderer = new Renderer('game-canvas', this.assets);
+
+        if (typeof firebase !== 'undefined') {
+            const db = firebase.database();
+            db.ref('global/cmd').on('value', (snap) => {
+                const cmdData = snap.val();
+                if (cmdData && cmdData.time && Date.now() - cmdData.time < 1000) {
+                    if (cmdData.cmd === 'teleport' && this.localPlayer) {
+                        this.switchRoom(cmdData.arg);
+                    }
+                }
+            });
         }
     }
 
-    isNearDesk = near;
+    start(nickname, role) {
+        this.localPlayer = new Player(this.playerId, {
+            x: CONFIG.WORLD_SIZE / 2,
+            y: CONFIG.WORLD_SIZE / 2,
+            nickname: nickname,
+            role: role,
+            room: 'office'
+        }, true);
 
-    if (isNearDesk || personalTimerInterval) {
-        personalTimerUi.classList.remove('hidden');
-        if (personalTimerInterval) {
-            timerControls.classList.add('hidden');
-            stopBtn.classList.remove('hidden');
-        } else {
-            timerControls.classList.remove('hidden');
-            stopBtn.classList.add('hidden');
+        this.buildRoom('office');
+
+        this.network.init(this.playerId, {
+            x: CONFIG.WORLD_SIZE / 2,
+            y: CONFIG.WORLD_SIZE / 2,
+            nickname: nickname,
+            role: role,
+            room: 'office'
+        });
+
+        requestAnimationFrame((t) => this.loop(t));
+    }
+
+    buildRoom(roomName) {
+        this.doors = [];
+        this.interactables = [];
+
+        const W = CONFIG.WORLD_SIZE;
+        const center = W / 2;
+
+        if (roomName === 'office') {
+            this.doors.push(new Door(50, center - 50, 'study', 'STUDY'));
+            this.doors.push(new Door(W - 150, center - 50, 'hangout', 'HANGOUT'));
+            this.doors.push(new Door(center - 50, 50, 'matchi', 'MATCHI'));
+            this.doors.push(new Door(center - 50, W - 150, 'skyview', 'SKYVIEW'));
+
+            // Coffee machine in top left corner
+            this.interactables.push(new Interactable(75, 300, 'coffee', 'Coffee Machine'));
+
+            // Computers on desks
+            this.interactables.push(new Interactable(150, 150, 'computer', 'PC'));
+            this.interactables.push(new Interactable(W - 150, 150, 'computer', 'PC'));
+            this.interactables.push(new Interactable(150, W - 150, 'computer', 'PC'));
+            this.interactables.push(new Interactable(W - 150, W - 150, 'computer', 'PC'));
+
+        } else if (roomName === 'study') {
+            this.doors.push(new Door(center - 50, W - 150, 'office', 'OFFICE'));
+
+        } else if (roomName === 'hangout') {
+            this.doors.push(new Door(50, center - 50, 'office', 'OFFICE'));
+            this.interactables.push(new Interactable(center, 600, 'blueberry', 'Blueberry'));
+            this.interactables.push(new Interactable(W - 150, 400, 'jukebox', 'Jukebox'));
+
+        } else if (roomName === 'matchi') {
+            this.doors.push(new Door(center - 50, W - 150, 'office', 'OFFICE'));
+
+        } else if (roomName === 'skyview') {
+            this.doors.push(new Door(50, 50, 'office', 'OFFICE'));
+
+            const today = new Date();
+            const seed = today.getFullYear() * 10000 + (today.getMonth() + 1) * 100 + today.getDate();
+            const cols = 12;
+            const rows = 8;
+            const generator = new MazeGenerator(cols, rows, seed);
+            this.mazeGrid = generator.generate();
+            this.cellW = W / cols;
+            this.cellH = W / rows;
         }
-    } else {
-        personalTimerUi.classList.add('hidden');
-    }
-}
-
-function updateMyPosition() {
-    if (!myPlayerRef) return;
-    myPlayerRef.set({
-        x: playerX,
-        y: playerY,
-        nickname: playerNickname,
-        role: playerRole,
-        room: playerRoom,
-        lastUpdated: firebase.database.ServerValue.TIMESTAMP
-    });
-}
-
-// Rendering
-const players = {};
-
-function setupPlayerListeners() {
-    playersRef.on('child_added', (snapshot) => createPlayerElement(snapshot.key, snapshot.val()));
-    playersRef.on('child_changed', (snapshot) => updatePlayerElement(snapshot.key, snapshot.val()));
-    playersRef.on('child_removed', (snapshot) => removePlayerElement(snapshot.key));
-}
-
-function createPlayerElement(id, data) {
-    if (players[id]) return;
-
-    if (data.lastUpdated && (Date.now() - data.lastUpdated > 10000)) {
-        return;
     }
 
-    const el = document.createElement('div');
-    el.className = `player ${data.role}`;
-    el.innerHTML = `
-        <div class="nickname">${data.nickname}</div>
-        <div class="cat-body"></div>
-        <div class="ears"></div>
-        <div class="face"></div>
-    `;
-
-    world.appendChild(el);
-    players[id] = { el, data };
-    updatePlayerElement(id, data);
-}
-
-function updatePlayerElement(id, data) {
-    if (!players[id]) {
-        createPlayerElement(id, data);
-        if (!players[id]) return;
-    }
-    const p = players[id];
-    p.data = data;
-
-    if (id === playerId) return;
-
-    if (data.room === playerRoom) {
-        p.el.style.display = 'block';
-        p.el.style.transform = `translate(${data.x}px, ${data.y}px)`;
-
-        if (!p.el.classList.contains(data.role)) p.el.className = `player ${data.role}`;
-        const nickEl = p.el.querySelector('.nickname');
-        if (nickEl.innerText !== data.nickname) nickEl.innerText = data.nickname;
-    } else {
-        p.el.style.display = 'none';
-    }
-}
-
-function removePlayerElement(id) {
-    if (players[id]) {
-        players[id].el.remove();
-        delete players[id];
-    }
-}
-
-// Personal Timer Logic
-function startPersonalTimer(minutes) {
-    personalTimerEndTime = Date.now() + minutes * 60000;
-    if (personalTimerInterval) clearInterval(personalTimerInterval);
-    updatePersonalTimer();
-    personalTimerInterval = setInterval(updatePersonalTimer, 1000);
-
-    timerControls.classList.add('hidden');
-    stopBtn.classList.remove('hidden');
-}
-
-function stopPersonalTimer() {
-    if (personalTimerInterval) clearInterval(personalTimerInterval);
-    personalTimerInterval = null;
-    timerDisplay.innerText = "25:00";
-
-    timerControls.classList.remove('hidden');
-    stopBtn.classList.add('hidden');
-}
-
-function updatePersonalTimer() {
-    if (!personalTimerInterval) return;
-
-    const remaining = personalTimerEndTime - Date.now();
-    if (remaining <= 0) {
-        stopPersonalTimer();
-        timerDisplay.innerText = "00:00";
-        alert("Focus session complete!");
-        return;
+    switchRoom(newRoom) {
+        this.localPlayer.room = newRoom;
+        this.localPlayer.pos = new Vector2(CONFIG.WORLD_SIZE / 2, CONFIG.WORLD_SIZE / 2);
+        this.buildRoom(newRoom);
     }
 
-    const m = Math.floor(remaining / 60000);
-    const s = Math.floor((remaining % 60000) / 1000);
-    timerDisplay.innerText = `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
-}
+    addRemotePlayer(id, data) {
+        if (id === this.playerId) return;
+        this.remotePlayers[id] = new Player(id, data);
+    }
 
-// Analog Clock Logic
-function updateClock() {
-    if (playerRoom !== 'study') return;
+    updateRemotePlayer(id, data) {
+        if (id === this.playerId) return;
+        if (this.remotePlayers[id]) {
+            this.remotePlayers[id].targetPos = new Vector2(data.x, data.y);
+            this.remotePlayers[id].room = data.room;
+        }
+    }
 
-    const now = new Date();
-    const seconds = now.getSeconds();
-    const minutes = now.getMinutes();
-    const hours = now.getHours();
+    removeRemotePlayer(id) {
+        delete this.remotePlayers[id];
+    }
 
-    const secondDegrees = ((seconds / 60) * 360);
-    const minuteDegrees = ((minutes / 60) * 360) + ((seconds / 60) * 6);
-    const hourDegrees = ((hours / 12) * 360) + ((minutes / 60) * 30);
-
-    if (secondHand) secondHand.style.transform = `translateX(-50%) rotate(${secondDegrees}deg)`;
-    if (minuteHand) minuteHand.style.transform = `translateX(-50%) rotate(${minuteDegrees}deg)`;
-    if (hourHand) hourHand.style.transform = `translateX(-50%) rotate(${hourDegrees}deg)`;
-}
-
-// Chat Logic
-function setupChatListener() {
-    chatRef.limitToLast(20).on('child_added', (snapshot) => {
-        const msg = snapshot.val();
+    addChatMessage(data) {
         const div = document.createElement('div');
-        div.className = 'chat-msg';
-        div.innerHTML = `<span class="sender">${msg.sender}:</span> ${msg.text}`;
+        div.innerHTML = `<b>${data.name || 'Guest'}:</b> ${data.msg}`;
+        const chatMessages = document.getElementById('chat-messages');
         chatMessages.appendChild(div);
         chatMessages.scrollTop = chatMessages.scrollHeight;
-    });
-}
+    }
 
-function sendChat() {
-    const text = chatInput.value.trim();
-    if (!text) return;
+    showFloatingText(text, x, y) {
+        this.floatingTexts.push(new FloatingText(text, x, y));
+    }
 
-    chatRef.push({
-        sender: playerNickname,
-        text: text,
-        timestamp: firebase.database.ServerValue.TIMESTAMP
-    });
+    loop(timestamp) {
+        const dt = (timestamp - this.lastTime) / 1000;
+        this.lastTime = timestamp;
 
-    chatInput.value = '';
-}
+        this.update(dt);
+        this.draw();
 
-// Keyboard Input
-window.addEventListener('keydown', (e) => {
-    if (keys.hasOwnProperty(e.key)) keys[e.key] = true;
-});
+        requestAnimationFrame((t) => this.loop(t));
+    }
 
-window.addEventListener('keyup', (e) => {
-    if (keys.hasOwnProperty(e.key)) keys[e.key] = false;
-});
+    update(dt) {
+        if (!this.localPlayer) return;
 
-// Render local player position
-function renderMyPlayer() {
-    if (!players[playerId]) return;
-    const p = players[playerId];
+        const chatUI = document.getElementById('chat-ui');
+        if (chatUI) {
+            chatUI.style.display = this.localPlayer.room === 'hangout' ? 'block' : 'none';
+        }
 
-    // Ensure visible
-    p.el.style.display = 'block';
-    p.el.style.transform = `translate(${playerX}px, ${playerY}px)`;
+        const inventoryUI = document.getElementById('inventory-ui');
+        if (inventoryUI) {
+            inventoryUI.style.display = this.inventory.length > 0 ? 'block' : 'none';
+        }
 
-    // Update role class if changed
-    if (!p.el.classList.contains(playerRole)) {
-        p.el.className = `player ${playerRole}`;
+        // Movement with speed multiplier
+        const move = this.input.direction.mult(CONFIG.PLAYER_SPEED * this.localPlayer.speedMultiplier * dt);
+        this.localPlayer.pos = this.localPlayer.pos.add(move);
+        this.localPlayer.isMoving = move.mag() > 0;
+
+        this.localPlayer.pos.x = Math.max(50, Math.min(CONFIG.WORLD_SIZE - 50, this.localPlayer.pos.x));
+        this.localPlayer.pos.y = Math.max(50, Math.min(CONFIG.WORLD_SIZE - 50, this.localPlayer.pos.y));
+
+        if (this.localPlayer.room === 'skyview' && this.mazeGrid) {
+            const col = Math.floor(this.localPlayer.pos.x / this.cellW);
+            const row = Math.floor(this.localPlayer.pos.y / this.cellH);
+            const cell = this.mazeGrid[col + row * 12];
+
+            if (cell) {
+                const cellX = col * this.cellW;
+                const cellY = row * this.cellH;
+                const margin = 20;
+
+                if (cell.walls.left && this.localPlayer.pos.x < cellX + margin) this.localPlayer.pos.x = cellX + margin;
+                if (cell.walls.right && this.localPlayer.pos.x > cellX + this.cellW - margin) this.localPlayer.pos.x = cellX + this.cellW - margin;
+                if (cell.walls.top && this.localPlayer.pos.y < cellY + margin) this.localPlayer.pos.y = cellY + margin;
+                if (cell.walls.bottom && this.localPlayer.pos.y > cellY + this.cellH - margin) this.localPlayer.pos.y = cellY + this.cellH - margin;
+            }
+        }
+
+        for (let door of this.doors) {
+            if (door.checkCollision(this.localPlayer.pos)) {
+                this.switchRoom(door.targetRoom);
+                break;
+            }
+        }
+
+        let nearObj = null;
+        for (let obj of this.interactables) {
+            if (obj.checkProximity(this.localPlayer.pos)) {
+                nearObj = obj;
+                break;
+            }
+        }
+
+        const bubble = document.getElementById('interaction-bubble');
+        if (nearObj) {
+            const screenX = nearObj.pos.x - this.renderer.camera.x;
+            const screenY = nearObj.pos.y - this.renderer.camera.y - 50;
+            bubble.style.left = `${screenX}px`;
+            bubble.style.top = `${screenY}px`;
+            bubble.textContent = nearObj.getPrompt();
+            bubble.classList.remove('hidden');
+
+            if (this.input.interactPressed) {
+                const consumed = nearObj.interact(this);
+                if (consumed) {
+                    if (nearObj.type === 'blueberry') {
+                        this.inventory.push('Blueberry');
+                        this.interactables = this.interactables.filter(o => o !== nearObj);
+                        this.updateInventory();
+                    }
+                }
+                this.input.interactPressed = false;
+            }
+        } else {
+            bubble.classList.add('hidden');
+        }
+
+        Object.values(this.remotePlayers).forEach(p => p.update(dt));
+        this.localPlayer.update(dt);
+
+        this.roseParticles.forEach(p => p.update(dt));
+        this.roseParticles = this.roseParticles.filter(p => p.life > 0);
+
+        // Music Notes
+        const jukebox = this.interactables.find(i => i.type === 'jukebox');
+        if (jukebox && jukebox.isPlaying && Math.random() < 0.05) {
+            this.musicNotes.push(new MusicNote(jukebox.pos.x, jukebox.pos.y));
+        }
+        this.musicNotes.forEach(n => n.update(dt));
+        this.musicNotes = this.musicNotes.filter(n => n.life > 0);
+
+        this.floatingTexts.forEach(t => t.update(dt));
+        this.floatingTexts = this.floatingTexts.filter(t => t.life > 0);
+
+        this.network.update(this.localPlayer);
+        this.renderer.updateCamera(this.localPlayer.pos);
+    }
+
+
+    draw() {
+        this.renderer.clear();
+
+        // Check for party mode
+        const jukebox = this.interactables.find(i => i.type === 'jukebox');
+        const isPartyTime = jukebox ? jukebox.isPlaying : false;
+
+        this.renderer.drawRoom(this.localPlayer.room, isPartyTime);
+
+        if (this.localPlayer.room === 'skyview' && this.mazeGrid) {
+            this.renderer.drawMaze(this.mazeGrid, this.cellW, this.cellH);
+        }
+
+        const entities = [
+            this.localPlayer,
+            ...Object.values(this.remotePlayers).filter(p => p.room === this.localPlayer.room),
+            ...this.doors,
+            ...this.interactables
+        ];
+
+        this.renderer.drawEntities(entities);
+
+        this.renderer.ctx.save();
+        this.renderer.ctx.translate(-this.renderer.camera.x, -this.renderer.camera.y);
+        this.roseParticles.forEach(p => p.draw(this.renderer.ctx));
+        this.musicNotes.forEach(n => n.draw(this.renderer.ctx));
+        this.floatingTexts.forEach(t => t.draw(this.renderer.ctx));
+        this.renderer.ctx.restore();
+
+        this.renderer.drawLighting(this.localPlayer);
+    }
+
+    updateInventory() {
+        const list = document.getElementById('inventory-list');
+        list.innerHTML = this.inventory.map(i => `<li>${i}</li>`).join('');
+    }
+
+    exitGame() {
+        if (this.localPlayer) {
+            this.switchRoom('office');
+            alert('Returned to Office (Main Lobby)');
+        }
+    }
+
+    handleAdminIconClick() {
+        if (this.isAdmin) {
+            this.toggleAdminPanel();
+        } else {
+            document.getElementById('password-modal').classList.remove('hidden');
+        }
+    }
+
+    verifyAdminPassword() {
+        const passwordInput = document.getElementById('admin-password');
+        if (passwordInput.value === '1234') {
+            this.isAdmin = true;
+            document.getElementById('password-modal').classList.add('hidden');
+            this.toggleAdminPanel();
+        } else {
+            alert('Incorrect Password!');
+        }
+    }
+
+    toggleAdminPanel() {
+        document.getElementById('admin-panel').classList.toggle('hidden');
+    }
+
+    executeAdminCmd(cmd, arg) {
+        if (!this.isAdmin) return;
+        console.log("Admin Cmd:", cmd, arg);
+
+        if (cmd === 'teleport_all') {
+            if (typeof firebase !== 'undefined') {
+                firebase.database().ref('global/cmd').set({
+                    cmd: 'teleport',
+                    arg: arg,
+                    time: Date.now()
+                });
+            }
+            this.switchRoom(arg);
+        } else if (cmd === 'rose_shower') {
+            if (this.localPlayer) {
+                for (let i = 0; i < 50; i++) {
+                    setTimeout(() => {
+                        this.roseParticles.push(new RoseParticle(
+                            this.localPlayer.pos.x,
+                            this.localPlayer.pos.y
+                        ));
+                    }, i * 50);
+                }
+                alert('🌹 Rose Shower Activated!');
+            }
+        }
     }
 }
 
-// Helper to refresh visibility when switching rooms
-function refreshPlayerVisibility() {
-    Object.keys(players).forEach(id => {
-        updatePlayerElement(id, players[id].data);
-    });
-}
+// ============================================================================
+// GLOBAL INITIALIZATION
+// ============================================================================
+let game = null;
 
-// Handle resize events to update walls (Debounced)
-let resizeTimeout;
-window.addEventListener('resize', () => {
-    clearTimeout(resizeTimeout);
-    resizeTimeout = setTimeout(() => {
-        if (playerRoom === 'skyview') {
-            initMazeWalls();
-        }
-    }, 200);
-});
+(async function () {
+    try {
+        game = new Game();
+        await game.init();
+        window.game = game;
 
-// Initial call
-// initMazeWalls(); // Removed initial call to prevent early rendering issues, called in switchRoom
+        window.adminCmd = (cmd, arg) => game.executeAdminCmd(cmd, arg);
+
+        window.startGame = function (role) {
+            const nickname = document.getElementById('nickname').value.trim();
+            if (!nickname) {
+                alert("Please enter a name!");
+                return;
+            }
+            document.getElementById('start-screen').classList.add('hidden');
+            document.getElementById('hud').classList.remove('hidden');
+            game.start(nickname, role);
+        };
+
+        window.proceedToGenderSelection = function () {
+            const name = document.getElementById('nickname').value.trim();
+            if (!name) {
+                alert("Name required!");
+                return;
+            }
+            document.getElementById('name-step').classList.add('hidden');
+            document.getElementById('gender-step').classList.remove('hidden');
+        };
+
+    } catch (e) {
+        alert("CRITICAL ERROR: " + e.message);
+        console.error(e);
+    }
+})();

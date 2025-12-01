@@ -22,226 +22,33 @@
 <body>
 
     <div id="game-container">
-        <!-- The Game World -->
-        <!-- The Game World -->
-        <div id="world">
-            <!-- Office Room -->
-            <div id="room-office" class="room">
-                <div class="window">
-                    <div class="moon"></div>
-                    <div class="star" style="top: 10%; left: 20%;"></div>
-                    <div class="star" style="top: 30%; left: 70%;"></div>
-                    <div class="star" style="top: 60%; left: 40%;"></div>
-                </div>
-                
-                <div class="desk" style="top: 25%; left: 15%;">
-                    <div class="monitor"></div>
-                    <div class="keyboard"></div>
-                </div>
-
-                <div class="desk" style="top: 25%; right: 15%;">
-                    <div class="monitor"></div>
-                    <div class="keyboard"></div>
-                    <div class="center-dot"></div>
-                </div>
-
-                <div class="plant" style="bottom: 10%; left: 5%;"></div>
-                <div class="coffee-machine" style="top: 10%; right: 5%;"></div>
-
-                <!-- Doors -->
-                <div class="door to-study" onclick="switchRoom('study', '50%', '50%')" style="top: 40%; left: 2%;">
-                    <span>&zwj;&zwj;📚 Study&zwj;&zwj;</span>
-                </div>
-                <div class="door to-hangout" onclick="switchRoom('hangout', '50%', '50%')" style="top: 40%; right: 2%;">
-                    <span>&zwj;&zwj;🫐 Hangout&zwj;&zwj;</span>
-                </div>
-                <div class="door to-matchi" onclick="switchRoom('matchi', '50%', '80%')" style="top: 2%; left: 50%; transform: translateX(-50%);">
-                    <span>&zwj;&zwj;🎵 Matchi&zwj;&zwj;</span>
-                </div>
-                <div class="door to-skyview" onclick="switchRoom('skyview', '10%', '10%')" style="bottom: 10%; right: 5%;">
-                    <span>&zwj;&zwj;🎮 Game&zwj;&zwj;</span>
-                </div>
-            </div>
-
-            <!-- Study Room -->
-            <div id="room-study" class="room hidden">
-                <div class="analog-clock" style="top: 5%; left: 50%; transform: translateX(-50%);">
-                    <div class="hand hour"></div>
-                    <div class="hand minute"></div>
-                    <div class="hand second"></div>
-                    <div class="center-dot"></div>
-                </div>
-
-                <!-- Desks in Study Room -->
-                <div class="desk" style="top: 25%; left: 20%;">
-                    <div class="monitor"></div>
-                    <div class="keyboard"></div>
-                </div>
-                <div class="desk" style="top: 25%; right: 20%;">
-                    <div class="monitor"></div>
-                    <div class="keyboard"></div>
-                </div>
-                <div class="desk" style="bottom: 25%; left: 20%;">
-                    <div class="monitor"></div>
-                    <div class="keyboard"></div>
-                </div>
-                <div class="desk" style="bottom: 25%; right: 20%;">
-                    <div class="monitor"></div>
-                    <div class="keyboard"></div>
-                </div>
-
-                <div class="door to-office" onclick="switchRoom('office', '10%', '50%')" style="bottom: 5%; left: 50%; transform: translateX(-50%);">
-                    <span>&zwj;&zwj;🔙 Office&zwj;&zwj;</span>
-                </div>
-            </div>
-
-            <!-- Hangout Room -->
-            <div id="room-hangout" class="room hidden">
-                <div class="blueberry-shop" style="top: 20%; right: 10%;">
-                    <div class="shop-sign">Blueberry</div>
-                    <div class="counter"></div>
-                </div>
-
-                <div class="dining-table" style="top: 40%; left: 20%;">
-                    <div class="chair" style="top: -15px; left: 25px;"></div>
-                    <div class="chair" style="bottom: -15px; left: 25px;"></div>
-                    <div class="plate"></div>
-                </div>
-
-                <div class="dining-table" style="bottom: 20%; right: 30%;">
-                    <div class="chair" style="top: -15px; left: 25px;"></div>
-                    <div class="chair" style="bottom: -15px; left: 25px;"></div>
-                    <div class="plate"></div>
-                </div>
-
-                <div class="door to-office" onclick="switchRoom('office', '80%', '50%')" style="bottom: 5%; left: 50%; transform: translateX(-50%);">
-                    <span>&zwj;&zwj;🔙 Office&zwj;&zwj;</span>
-                </div>
-            </div>
-
-            <!-- Matchi Room -->
-            <div id="room-matchi" class="room hidden">
-                <!-- Phonograph on left desk -->
-                <div class="phonograph-desk" style="top: 200px; left: 100px;">
-                    <div class="phonograph">
-                        <div class="phonograph-base"></div>
-                        <div class="vinyl-disc" id="vinyl-disc">
-                            <div class="vinyl-label"></div>
-                        </div>
-                        <div class="tonearm"></div>
-                    </div>
-                </div>
-
-                <!-- Music Player (moved from global UI) -->
-                <div id="music-player-matchi">
-                    <button id="music-toggle" onclick="toggleMusic()">🎵 Play Lofi</button>
-                    <audio id="bg-music" loop>
-                        <source src="https://cdn.pixabay.com/download/audio/2022/05/27/audio_1808fbf07a.mp3?filename=lofi-study-112191.mp3" type="audio/mpeg">
-                        Your browser does not support the audio element.
-                    </audio>
-                </div>
-                
-                <!-- Disco Ball (top center) -->
-                <div class="disco-ball" id="disco-ball" style="top: 30px; left: 50%; transform: translateX(-50%);">
-                    <div class="disco-facet"></div>
-                    <div class="disco-facet"></div>
-                    <div class="disco-facet"></div>
-                    <div class="disco-facet"></div>
-                </div>
-
-                <!-- Lava Lamp (right side) -->
-                <div class="lava-lamp" style="top: 150px; right: 100px;">
-                    <div class="lava-blob blob1"></div>
-                    <div class="lava-blob blob2"></div>
-                    <div class="lava-blob blob3"></div>
-                </div>
-
-                <!-- Neon Signs -->
-                <div class="neon-sign" style="top: 100px; left: 50px;">
-                    <span class="neon-text">VIBES</span>
-                </div>
-                <div class="neon-sign" style="top: 100px; right: 50px;">
-                    <span class="neon-text pink">CHILL</span>
-                </div>
-                
-                <div class="door to-office" onclick="switchRoom('office', 400, 300)" style="bottom: 20px; left: 50%; transform: translateX(-50%);">
-                    <span>Back to Office</span>
-                </div>
-            </div>
-
-            <!-- Maze Game Room (formerly Skyview) -->
-            <div id="room-skyview" class="room hidden">
-                <!-- Role Selection UI -->
-                <div id="maze-role-selection" class="maze-ui">
-                    <h2>Choose Your Role</h2>
-                    <button class="role-btn seeker-btn" onclick="selectMazeRole('seeker')">
-                        🔍 Be the Seeker
-                    </button>
-                    <button class="role-btn hider-btn" onclick="selectMazeRole('hider')">
-                        🙈 Be a Hider
-                    </button>
-                </div>
-
-                <!-- Game Status UI -->
-                <div id="maze-status" class="maze-ui hidden">
-                    <div id="maze-role-display"></div>
-                    <div id="maze-timer">Time: 0:00</div>
-                    <div id="maze-score">Tagged: 0</div>
-                </div>
-
-                <!-- Maze Walls -->
-                <div class="maze-container">
-                    <!-- Horizontal walls -->
-                    <div class="maze-wall horizontal" style="top: 100px; left: 0; width: 300px;"></div>
-                    <div class="maze-wall horizontal" style="top: 100px; left: 500px; width: 300px;"></div>
-                    <div class="maze-wall horizontal" style="top: 250px; left: 100px; width: 200px;"></div>
-                    <div class="maze-wall horizontal" style="top: 250px; left: 500px; width: 200px;"></div>
-                    <div class="maze-wall horizontal" style="top: 400px; left: 0; width: 250px;"></div>
-                    <div class="maze-wall horizontal" style="top: 400px; left: 550px; width: 250px;"></div>
-                    
-                    <!-- Vertical walls -->
-                    <div class="maze-wall vertical" style="top: 0; left: 200px; height: 200px;"></div>
-                    <div class="maze-wall vertical" style="top: 300px; left: 200px; height: 200px;"></div>
-                    <div class="maze-wall vertical" style="top: 0; left: 600px; height: 200px;"></div>
-                    <div class="maze-wall vertical" style="top: 300px; left: 600px; height: 200px;"></div>
-                    <div class="maze-wall vertical" style="top: 100px; left: 400px; height: 200px;"></div>
-                    
-                    <!-- Hiding spots -->
-                    <div class="hiding-spot bush" style="top: 50px; left: 50px;">🌳</div>
-                    <div class="hiding-spot bush" style="top: 50px; right: 50px;">🌳</div>
-                    <div class="hiding-spot box" style="top: 300px; left: 350px;">📦</div>
-                    <div class="hiding-spot bush" style="bottom: 100px; left: 100px;">🌿</div>
-                    <div class="hiding-spot box" style="bottom: 100px; right: 150px;">📦</div>
-                </div>
-            </div>
-
-            <!-- Players will be injected here by JS -->
-        </div>
+        <!-- The Game World (Canvas) -->
+        <canvas id="game-canvas"></canvas>
 
         <!-- UI Overlay -->
         <div id="ui-layer">
-            <div id="legend">
-                <p>Move: WASD / Arrow Keys</p>
-            </div>
-            <div id="connection-status" class="hidden">Reconnecting...</div>
-            
-            <!-- Personal Timer UI (Study Room) -->
-            <div id="personal-timer-ui" class="hidden">
-                <div id="timer-display">25:00</div>
-                <div id="timer-controls">
-                    <button onclick="startPersonalTimer(25)">Start (25m)</button>
+            <div id="hud" class="hidden">
+                <div id="chat-ui">
+                    <div id="chat-messages"></div>
+                    <div id="chat-input-area">
+                        <input type="text" id="chat-input" placeholder="Say something..." maxlength="50">
+                        <button onclick="game.networkManager.sendChat()">Send</button>
+                    </div>
                 </div>
-                <button onclick="stopPersonalTimer()" id="stop-btn" class="hidden">Stop</button>
+                <div id="inventory-ui">
+                    <h3>Inventory</h3>
+                    <ul id="inventory-list"></ul>
+                </div>
+                <div id="legend">
+                    <p>WASD / Arrows to Move</p>
+                    <p>E to Interact</p>
+                </div>
             </div>
 
-            <!-- Chat UI (Hangout Room) -->
-            <div id="chat-ui" class="hidden">
-                <div id="chat-messages"></div>
-                <div id="chat-input-area">
-                    <input type="text" id="chat-input" placeholder="Say something..." maxlength="50">
-                    <button onclick="sendChat()">Send</button>
-                </div>
-            </div>
+            <div id="connection-status" class="hidden">Reconnecting...</div>
+            
+            <!-- Interaction Bubble -->
+            <div id="interaction-bubble" class="hidden">Press E</div>
 
             <!-- Mobile Controls -->
             <div id="mobile-controls">
@@ -253,14 +60,13 @@
                         <button id="btn-right" class="d-btn">▶</button>
                     </div>
                 </div>
+                <button id="btn-interact" class="action-btn">E</button>
             </div>
 
             <!-- Admin Icon -->
-            <div id="admin-icon" onclick="handleAdminIconClick()">
+            <div id="admin-icon" onclick="game.handleAdminIconClick()">
                 🛡️
             </div>
-
-
         </div>
 
         <!-- Admin Password Modal -->
@@ -268,7 +74,7 @@
             <div class="modal-content">
                 <h2>Admin Access</h2>
                 <input type="password" id="admin-password" placeholder="Enter Password">
-                <button onclick="verifyAdminPassword()">Login</button>
+                <button onclick="game.verifyAdminPassword()">Login</button>
             </div>
         </div>
 
@@ -277,19 +83,20 @@
             <div class="modal-content admin-content">
                 <div class="admin-header">
                     <h2>🛡️ Admin Command Center</h2>
-                    <button class="close-btn" onclick="toggleAdminPanel()">×</button>
+                    <button class="close-btn" onclick="game.toggleAdminPanel()">×</button>
                 </div>
                 
                 <div class="admin-section">
                     <h3>Global Actions</h3>
                     <div class="action-buttons">
-                        <button class="admin-btn" onclick="teleportAllPlayers('office')">🏠 All to Office</button>
-                        <button class="admin-btn" onclick="teleportAllPlayers('skyview')">🌌 All to Maze</button>
-                        <button class="admin-btn" onclick="teleportAllPlayers('matchi')">💃 All to Disco</button>
+                        <button class="admin-btn" onclick="adminCmd('teleport_all', 'office')">🏠 All to Office</button>
+                        <button class="admin-btn" onclick="adminCmd('teleport_all', 'skyview')">🌌 All to Maze</button>
+                        <button class="admin-btn" onclick="adminCmd('teleport_all', 'matchi')">💃 All to Disco</button>
+                        <button class="admin-btn" onclick="adminCmd('rose_shower', null)" style="background: linear-gradient(135deg, #ff6b9d 0%, #c44569 100%);">🌹 Rose Shower</button>
                     </div>
                     <div class="control-group">
                         <label>Game Speed:</label>
-                        <input type="range" min="1" max="20" value="4" onchange="updateGameSpeed(this.value)">
+                        <input type="range" min="1" max="20" value="4" onchange="adminCmd('speed', this.value)">
                     </div>
                 </div>
 
