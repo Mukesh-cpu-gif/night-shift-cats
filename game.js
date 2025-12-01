@@ -882,399 +882,419 @@ class Game {
         this.floatingTexts = [];
 
         // Audio System
+        // Audio System
         try {
-
-            if (typeof firebase !== 'undefined') {
-                const db = firebase.database();
-                db.ref('global/cmd').on('value', (snap) => {
-                    const cmdData = snap.val();
-                    if (!cmdData || !cmdData.id) return;
-
-                    // Prevent duplicate execution
-                    if (this.lastCmdId === cmdData.id) return;
-                    this.lastCmdId = cmdData.id;
-
-                    if (cmdData.cmd === 'teleport' || cmdData.cmd === 'teleport_all') {
-                        // Always execute teleport for state sync (ignore time)
-                        if (this.localPlayer) this.switchRoom(cmdData.arg);
-                    } else if (cmdData.cmd === 'speed') {
-                        // Always execute speed
-                        if (this.localPlayer) this.localPlayer.speedMultiplier = parseFloat(cmdData.arg);
-                    } else if (cmdData.cmd === 'rose_shower') {
-                        // Only execute if recent (< 10s) to avoid replay on reload
-                        if (Date.now() - cmdData.time < 10000) this.triggerRoseShower();
-                    } else if (cmdData.cmd === 'kick') {
-                        if (this.localPlayer && this.localPlayer.id === cmdData.arg) {
-                            alert("You have been kicked by an admin.");
-                            location.reload();
-                        }
-                    }
-                });
-            }
+            this.bgm = new Audio('https://cdn.pixabay.com/audio/2022/05/27/audio_1808fbf07a.mp3');
+            this.bgm.loop = true;
+            this.bgm.crossOrigin = "anonymous";
+        } catch (e) {
+            console.warn("Audio failed to initialize:", e);
+            this.bgm = { play: () => Promise.resolve(), pause: () => { } };
         }
+
+        this.mazeGrid = null;
+        this.cellW = 0;
+        this.cellH = 0;
+        this.lastTime = 0;
+        this.debugMode = false;
+        this.lastCmdId = null;
+    }
+
+    async init() {
+        await this.assets.init();
+        this.renderer = new Renderer('game-canvas', this.assets);
+
+        if (typeof firebase !== 'undefined') {
+            const db = firebase.database();
+            db.ref('global/cmd').on('value', (snap) => {
+                const cmdData = snap.val();
+                if (!cmdData || !cmdData.id) return;
+
+                // Prevent duplicate execution
+                if (this.lastCmdId === cmdData.id) return;
+                this.lastCmdId = cmdData.id;
+
+                if (cmdData.cmd === 'teleport' || cmdData.cmd === 'teleport_all') {
+                    // Always execute teleport for state sync (ignore time)
+                    if (this.localPlayer) this.switchRoom(cmdData.arg);
+                } else if (cmdData.cmd === 'speed') {
+                    // Always execute speed
+                    if (this.localPlayer) this.localPlayer.speedMultiplier = parseFloat(cmdData.arg);
+                } else if (cmdData.cmd === 'rose_shower') {
+                    // Only execute if recent (< 10s) to avoid replay on reload
+                    if (Date.now() - cmdData.time < 10000) this.triggerRoseShower();
+                } else if (cmdData.cmd === 'kick') {
+                    if (this.localPlayer && this.localPlayer.id === cmdData.arg) {
+                        alert("You have been kicked by an admin.");
+                        location.reload();
+                    }
+                }
+            });
+        }
+    }
 
     start(nickname, role) {
-            this.localPlayer = new Player(this.playerId, {
-                x: CONFIG.WORLD_WIDTH / 2,
-                y: CONFIG.WORLD_HEIGHT / 2,
-                nickname: nickname,
-                role: role,
-                room: 'office'
-            }, true);
+        this.localPlayer = new Player(this.playerId, {
+            x: CONFIG.WORLD_WIDTH / 2,
+            y: CONFIG.WORLD_HEIGHT / 2,
+            nickname: nickname,
+            role: role,
+            room: 'office'
+        }, true);
 
-            this.buildRoom('office');
+        this.buildRoom('office');
 
-            this.network.init(this.playerId, {
-                x: CONFIG.WORLD_WIDTH / 2,
-                y: CONFIG.WORLD_HEIGHT / 2,
-                nickname: nickname,
-                role: role,
-                room: 'office'
-            });
+        this.network.init(this.playerId, {
+            x: CONFIG.WORLD_WIDTH / 2,
+            y: CONFIG.WORLD_HEIGHT / 2,
+            nickname: nickname,
+            role: role,
+            room: 'office'
+        });
 
-            requestAnimationFrame((t) => this.loop(t));
+        requestAnimationFrame((t) => this.loop(t));
+    }
+
+    buildRoom(roomName) {
+        this.doors = [];
+        this.interactables = [];
+        const W = CONFIG.WORLD_WIDTH;
+        const H = CONFIG.WORLD_HEIGHT;
+        const centerX = W / 2;
+        const centerY = H / 2;
+
+        // Structured Room Layouts
+        if (roomName === 'office') {
+            this.doors.push(new Door(50, centerY - 50, 'study', 'STUDY'));
+            this.doors.push(new Door(W - 150, centerY - 50, 'hangout', 'HANGOUT'));
+            this.doors.push(new Door(centerX - 50, 50, 'matchi', 'MATCHI'));
+            this.doors.push(new Door(centerX - 50, H - 150, 'skyview', 'SKYVIEW'));
+
+            // Props
+            this.interactables.push(new Interactable(75, 300, 'coffee', 'Coffee Machine'));
+            this.interactables.push(new Interactable(200, 200, 'computer', 'PC'));
+            this.interactables.push(new Interactable(W - 200, 200, 'computer', 'PC'));
+            this.interactables.push(new Interactable(200, H - 200, 'computer', 'PC'));
+            this.interactables.push(new Interactable(W - 200, H - 200, 'computer', 'PC'));
+
+        } else if (roomName === 'study') {
+            this.doors.push(new Door(centerX - 50, H - 150, 'office', 'OFFICE'));
+            this.interactables.push(new Interactable(200, 200, 'bookshelf', 'Books'));
+            this.interactables.push(new Interactable(W - 200, 200, 'bookshelf', 'Books'));
+
+        } else if (roomName === 'hangout') {
+            this.doors.push(new Door(50, centerY - 50, 'office', 'OFFICE'));
+            this.interactables.push(new Interactable(centerX, H - 200, 'blueberry', 'Blueberry'));
+            this.interactables.push(new Interactable(W - 150, centerY, 'jukebox', 'Jukebox'));
+
+        } else if (roomName === 'matchi') {
+            this.doors.push(new Door(centerX - 50, H - 150, 'office', 'OFFICE'));
+
+        } else if (roomName === 'skyview') {
+            this.doors.push(new Door(50, 50, 'office', 'OFFICE'));
+            const today = new Date();
+            const seed = today.getFullYear() * 10000 + (today.getMonth() + 1) * 100 + today.getDate();
+            const generator = new MazeGenerator(16, 9, seed);
+            this.mazeGrid = generator.generate();
+            this.cellW = W / 16;
+            this.cellH = H / 9;
         }
+    }
 
-        buildRoom(roomName) {
-            this.doors = [];
-            this.interactables = [];
-            const W = CONFIG.WORLD_WIDTH;
-            const H = CONFIG.WORLD_HEIGHT;
-            const centerX = W / 2;
-            const centerY = H / 2;
+    switchRoom(newRoom) {
+        this.localPlayer.room = newRoom;
+        this.localPlayer.pos = new Vector2(CONFIG.WORLD_WIDTH / 2, CONFIG.WORLD_HEIGHT / 2);
+        this.buildRoom(newRoom);
+    }
 
-            // Structured Room Layouts
-            if (roomName === 'office') {
-                this.doors.push(new Door(50, centerY - 50, 'study', 'STUDY'));
-                this.doors.push(new Door(W - 150, centerY - 50, 'hangout', 'HANGOUT'));
-                this.doors.push(new Door(centerX - 50, 50, 'matchi', 'MATCHI'));
-                this.doors.push(new Door(centerX - 50, H - 150, 'skyview', 'SKYVIEW'));
+    addRemotePlayer(id, data) {
+        if (id === this.playerId) return;
+        this.remotePlayers[id] = new Player(id, data);
+    }
 
-                // Props
-                this.interactables.push(new Interactable(75, 300, 'coffee', 'Coffee Machine'));
-                this.interactables.push(new Interactable(200, 200, 'computer', 'PC'));
-                this.interactables.push(new Interactable(W - 200, 200, 'computer', 'PC'));
-                this.interactables.push(new Interactable(200, H - 200, 'computer', 'PC'));
-                this.interactables.push(new Interactable(W - 200, H - 200, 'computer', 'PC'));
+    updateRemotePlayer(id, data) {
+        if (id === this.playerId) return;
+        if (this.remotePlayers[id]) {
+            this.remotePlayers[id].targetPos = new Vector2(data.x, data.y);
+            this.remotePlayers[id].room = data.room;
+            this.remotePlayers[id].lastSeen = Date.now();
+            if (data.nickname) this.remotePlayers[id].nickname = data.nickname;
+        }
+    }
 
-            } else if (roomName === 'study') {
-                this.doors.push(new Door(centerX - 50, H - 150, 'office', 'OFFICE'));
-                this.interactables.push(new Interactable(200, 200, 'bookshelf', 'Books'));
-                this.interactables.push(new Interactable(W - 200, 200, 'bookshelf', 'Books'));
+    removeRemotePlayer(id) {
+        delete this.remotePlayers[id];
+    }
 
-            } else if (roomName === 'hangout') {
-                this.doors.push(new Door(50, centerY - 50, 'office', 'OFFICE'));
-                this.interactables.push(new Interactable(centerX, H - 200, 'blueberry', 'Blueberry'));
-                this.interactables.push(new Interactable(W - 150, centerY, 'jukebox', 'Jukebox'));
+    addChatMessage(data) {
+        const div = document.createElement('div');
+        div.innerHTML = `<b>${data.name || 'Guest'}:</b> ${data.msg}`;
+        const chatMessages = document.getElementById('chat-messages');
+        chatMessages.appendChild(div);
+        chatMessages.scrollTop = chatMessages.scrollHeight;
+    }
 
-            } else if (roomName === 'matchi') {
-                this.doors.push(new Door(centerX - 50, H - 150, 'office', 'OFFICE'));
+    showFloatingText(text, x, y) {
+        this.floatingTexts.push(new FloatingText(text, x, y));
+    }
 
-            } else if (roomName === 'skyview') {
-                this.doors.push(new Door(50, 50, 'office', 'OFFICE'));
-                const today = new Date();
-                const seed = today.getFullYear() * 10000 + (today.getMonth() + 1) * 100 + today.getDate();
-                const generator = new MazeGenerator(16, 9, seed);
-                this.mazeGrid = generator.generate();
-                this.cellW = W / 16;
-                this.cellH = H / 9;
+    loop(timestamp) {
+        const dt = (timestamp - this.lastTime) / 1000;
+        this.lastTime = timestamp;
+        this.update(dt);
+        this.draw();
+        requestAnimationFrame((t) => this.loop(t));
+    }
+
+    update(dt) {
+        if (!this.localPlayer) return;
+
+        // UI Updates
+        const chatUI = document.getElementById('chat-ui');
+        if (chatUI) chatUI.style.display = this.localPlayer.room === 'hangout' ? 'block' : 'none';
+
+        const inventoryUI = document.getElementById('inventory-ui');
+        if (inventoryUI) inventoryUI.style.display = this.inventory.length > 0 ? 'block' : 'none';
+
+        // Movement
+        const move = this.input.direction.mult(CONFIG.PLAYER_SPEED * this.localPlayer.speedMultiplier * dt);
+        this.localPlayer.pos = this.localPlayer.pos.add(move);
+        this.localPlayer.isMoving = move.mag() > 0;
+
+        // Bounds
+        this.localPlayer.pos.x = Math.max(50, Math.min(CONFIG.WORLD_WIDTH - 50, this.localPlayer.pos.x));
+        this.localPlayer.pos.y = Math.max(50, Math.min(CONFIG.WORLD_HEIGHT - 50, this.localPlayer.pos.y));
+
+        // Maze Collision
+        if (this.localPlayer.room === 'skyview' && this.mazeGrid) {
+            const col = Math.floor(this.localPlayer.pos.x / this.cellW);
+            const row = Math.floor(this.localPlayer.pos.y / this.cellH);
+            const cell = this.mazeGrid[col + row * 12];
+            if (cell) {
+                const cellX = col * this.cellW;
+                const cellY = row * this.cellH;
+                const margin = this.localPlayer.radius; // Use player radius
+                if (cell.walls.left && this.localPlayer.pos.x < cellX + margin) this.localPlayer.pos.x = cellX + margin;
+                if (cell.walls.right && this.localPlayer.pos.x > cellX + this.cellW - margin) this.localPlayer.pos.x = cellX + this.cellW - margin;
+                if (cell.walls.top && this.localPlayer.pos.y < cellY + margin) this.localPlayer.pos.y = cellY + margin;
+                if (cell.walls.bottom && this.localPlayer.pos.y > cellY + this.cellH - margin) this.localPlayer.pos.y = cellY + this.cellH - margin;
             }
         }
 
-        switchRoom(newRoom) {
-            this.localPlayer.room = newRoom;
-            this.localPlayer.pos = new Vector2(CONFIG.WORLD_WIDTH / 2, CONFIG.WORLD_HEIGHT / 2);
-            this.buildRoom(newRoom);
-        }
-
-        addRemotePlayer(id, data) {
-            if (id === this.playerId) return;
-            this.remotePlayers[id] = new Player(id, data);
-        }
-
-        updateRemotePlayer(id, data) {
-            if (id === this.playerId) return;
-            if (this.remotePlayers[id]) {
-                this.remotePlayers[id].targetPos = new Vector2(data.x, data.y);
-                this.remotePlayers[id].room = data.room;
-                this.remotePlayers[id].lastSeen = Date.now();
-                if (data.nickname) this.remotePlayers[id].nickname = data.nickname;
+        // Door Collision
+        for (let door of this.doors) {
+            if (door.checkCollision(this.localPlayer.pos)) {
+                this.switchRoom(door.targetRoom);
+                break;
             }
         }
 
-        removeRemotePlayer(id) {
-            delete this.remotePlayers[id];
-        }
-
-        addChatMessage(data) {
-            const div = document.createElement('div');
-            div.innerHTML = `<b>${data.name || 'Guest'}:</b> ${data.msg}`;
-            const chatMessages = document.getElementById('chat-messages');
-            chatMessages.appendChild(div);
-            chatMessages.scrollTop = chatMessages.scrollHeight;
-        }
-
-        showFloatingText(text, x, y) {
-            this.floatingTexts.push(new FloatingText(text, x, y));
-        }
-
-        loop(timestamp) {
-            const dt = (timestamp - this.lastTime) / 1000;
-            this.lastTime = timestamp;
-            this.update(dt);
-            this.draw();
-            requestAnimationFrame((t) => this.loop(t));
-        }
-
-        update(dt) {
-            if (!this.localPlayer) return;
-
-            // UI Updates
-            const chatUI = document.getElementById('chat-ui');
-            if (chatUI) chatUI.style.display = this.localPlayer.room === 'hangout' ? 'block' : 'none';
-
-            const inventoryUI = document.getElementById('inventory-ui');
-            if (inventoryUI) inventoryUI.style.display = this.inventory.length > 0 ? 'block' : 'none';
-
-            // Movement
-            const move = this.input.direction.mult(CONFIG.PLAYER_SPEED * this.localPlayer.speedMultiplier * dt);
-            this.localPlayer.pos = this.localPlayer.pos.add(move);
-            this.localPlayer.isMoving = move.mag() > 0;
-
-            // Bounds
-            this.localPlayer.pos.x = Math.max(50, Math.min(CONFIG.WORLD_WIDTH - 50, this.localPlayer.pos.x));
-            this.localPlayer.pos.y = Math.max(50, Math.min(CONFIG.WORLD_HEIGHT - 50, this.localPlayer.pos.y));
-
-            // Maze Collision
-            if (this.localPlayer.room === 'skyview' && this.mazeGrid) {
-                const col = Math.floor(this.localPlayer.pos.x / this.cellW);
-                const row = Math.floor(this.localPlayer.pos.y / this.cellH);
-                const cell = this.mazeGrid[col + row * 12];
-                if (cell) {
-                    const cellX = col * this.cellW;
-                    const cellY = row * this.cellH;
-                    const margin = this.localPlayer.radius; // Use player radius
-                    if (cell.walls.left && this.localPlayer.pos.x < cellX + margin) this.localPlayer.pos.x = cellX + margin;
-                    if (cell.walls.right && this.localPlayer.pos.x > cellX + this.cellW - margin) this.localPlayer.pos.x = cellX + this.cellW - margin;
-                    if (cell.walls.top && this.localPlayer.pos.y < cellY + margin) this.localPlayer.pos.y = cellY + margin;
-                    if (cell.walls.bottom && this.localPlayer.pos.y > cellY + this.cellH - margin) this.localPlayer.pos.y = cellY + this.cellH - margin;
-                }
+        // Interaction Proximity
+        let nearObj = null;
+        for (let obj of this.interactables) {
+            if (obj.checkProximity(this.localPlayer.pos)) {
+                nearObj = obj;
+                break;
             }
+        }
 
-            // Door Collision
-            for (let door of this.doors) {
-                if (door.checkCollision(this.localPlayer.pos)) {
-                    this.switchRoom(door.targetRoom);
-                    break;
-                }
-            }
+        const bubble = document.getElementById('interaction-bubble');
+        if (nearObj) {
+            const screenX = nearObj.pos.x - this.renderer.camera.x;
+            const screenY = nearObj.pos.y - this.renderer.camera.y - 60;
+            bubble.style.left = `${screenX}px`;
+            bubble.style.top = `${screenY}px`;
+            bubble.textContent = nearObj.getPrompt();
+            bubble.classList.remove('hidden');
 
-            // Interaction Proximity
-            let nearObj = null;
-            for (let obj of this.interactables) {
-                if (obj.checkProximity(this.localPlayer.pos)) {
-                    nearObj = obj;
-                    break;
-                }
-            }
-
-            const bubble = document.getElementById('interaction-bubble');
-            if (nearObj) {
-                const screenX = nearObj.pos.x - this.renderer.camera.x;
-                const screenY = nearObj.pos.y - this.renderer.camera.y - 60;
-                bubble.style.left = `${screenX}px`;
-                bubble.style.top = `${screenY}px`;
-                bubble.textContent = nearObj.getPrompt();
-                bubble.classList.remove('hidden');
-
-                if (this.input.interactPressed) {
-                    const consumed = nearObj.interact(this);
-                    if (consumed) {
-                        if (nearObj.type === 'blueberry') {
-                            this.inventory.push('Blueberry');
-                            this.interactables = this.interactables.filter(o => o !== nearObj);
-                            this.updateInventory();
-                        }
+            if (this.input.interactPressed) {
+                const consumed = nearObj.interact(this);
+                if (consumed) {
+                    if (nearObj.type === 'blueberry') {
+                        this.inventory.push('Blueberry');
+                        this.interactables = this.interactables.filter(o => o !== nearObj);
+                        this.updateInventory();
                     }
-                    this.input.interactPressed = false;
                 }
-            } else {
-                bubble.classList.add('hidden');
+                this.input.interactPressed = false;
             }
-
-            // Remote Players Cleanup
-            const now = Date.now();
-            Object.keys(this.remotePlayers).forEach(id => {
-                const p = this.remotePlayers[id];
-                if (now - p.lastSeen > 30000) { // Increased to 30 seconds to prevent disappearing
-                    delete this.remotePlayers[id];
-                    return;
-                }
-                p.update(dt);
-            });
-
-            this.localPlayer.update(dt);
-            this.roseParticles.forEach(p => p.update(dt));
-            this.roseParticles = this.roseParticles.filter(p => p.life > 0);
-
-            // Music Notes
-            const jukebox = this.interactables.find(i => i.type === 'jukebox');
-            if (jukebox && jukebox.isPlaying && Math.random() < 0.05) {
-                this.musicNotes.push(new MusicNote(jukebox.pos.x, jukebox.pos.y));
-            }
-            this.musicNotes.forEach(n => n.update(dt));
-            this.musicNotes = this.musicNotes.filter(n => n.life > 0);
-
-            this.floatingTexts.forEach(t => t.update(dt));
-            this.floatingTexts = this.floatingTexts.filter(t => t.life > 0);
-
-            this.network.update(this.localPlayer);
-            this.renderer.updateCamera(this.localPlayer.pos);
+        } else {
+            bubble.classList.add('hidden');
         }
 
-        draw() {
-            this.renderer.clear();
-
-            const jukebox = this.interactables.find(i => i.type === 'jukebox');
-            const isPartyTime = jukebox ? jukebox.isPlaying : false;
-
-            this.renderer.drawRoom(this.localPlayer.room, isPartyTime);
-
-            if (this.localPlayer.room === 'skyview' && this.mazeGrid) {
-                this.renderer.drawMaze(this.mazeGrid, this.cellW, this.cellH);
+        // Remote Players Cleanup
+        const now = Date.now();
+        Object.keys(this.remotePlayers).forEach(id => {
+            const p = this.remotePlayers[id];
+            if (now - p.lastSeen > 30000) { // Increased to 30 seconds to prevent disappearing
+                delete this.remotePlayers[id];
+                return;
             }
+            p.update(dt);
+        });
 
-            const entities = [
-                this.localPlayer,
-                ...Object.values(this.remotePlayers).filter(p => p.room === this.localPlayer.room),
-                ...this.doors,
-                ...this.interactables
-            ];
+        this.localPlayer.update(dt);
+        this.roseParticles.forEach(p => p.update(dt));
+        this.roseParticles = this.roseParticles.filter(p => p.life > 0);
 
-            // Find hovered entity for outline effect
-            let hoveredEntity = null;
-            for (let obj of this.interactables) {
-                if (obj.checkProximity(this.localPlayer.pos)) {
-                    hoveredEntity = obj;
-                    break;
-                }
-            }
+        // Music Notes
+        const jukebox = this.interactables.find(i => i.type === 'jukebox');
+        if (jukebox && jukebox.isPlaying && Math.random() < 0.05) {
+            this.musicNotes.push(new MusicNote(jukebox.pos.x, jukebox.pos.y));
+        }
+        this.musicNotes.forEach(n => n.update(dt));
+        this.musicNotes = this.musicNotes.filter(n => n.life > 0);
 
-            this.renderer.drawEntities(entities, hoveredEntity);
+        this.floatingTexts.forEach(t => t.update(dt));
+        this.floatingTexts = this.floatingTexts.filter(t => t.life > 0);
 
-            this.renderer.ctx.save();
-            this.renderer.ctx.translate(-this.renderer.camera.x, -this.renderer.camera.y);
-            this.roseParticles.forEach(p => p.draw(this.renderer.ctx));
-            this.musicNotes.forEach(n => n.draw(this.renderer.ctx));
-            this.floatingTexts.forEach(t => t.draw(this.renderer.ctx));
-            this.renderer.ctx.restore();
+        this.network.update(this.localPlayer);
+        this.renderer.updateCamera(this.localPlayer.pos);
+    }
 
-            this.renderer.drawLighting(this.localPlayer);
+    draw() {
+        this.renderer.clear();
+
+        const jukebox = this.interactables.find(i => i.type === 'jukebox');
+        const isPartyTime = jukebox ? jukebox.isPlaying : false;
+
+        this.renderer.drawRoom(this.localPlayer.room, isPartyTime);
+
+        if (this.localPlayer.room === 'skyview' && this.mazeGrid) {
+            this.renderer.drawMaze(this.mazeGrid, this.cellW, this.cellH);
         }
 
-        updateInventory() {
-            const list = document.getElementById('inventory-list');
-            list.innerHTML = this.inventory.map(i => `<li>${i}</li>`).join('');
-        }
+        const entities = [
+            this.localPlayer,
+            ...Object.values(this.remotePlayers).filter(p => p.room === this.localPlayer.room),
+            ...this.doors,
+            ...this.interactables
+        ];
 
-        exitGame() {
-            if (this.localPlayer) {
-                this.switchRoom('office');
-                alert('Returned to Office (Main Lobby)');
+        // Find hovered entity for outline effect
+        let hoveredEntity = null;
+        for (let obj of this.interactables) {
+            if (obj.checkProximity(this.localPlayer.pos)) {
+                hoveredEntity = obj;
+                break;
             }
         }
 
-        handleAdminIconClick() {
-            if (this.isAdmin) {
-                this.toggleAdminPanel();
-            } else {
-                document.getElementById('password-modal').classList.remove('hidden');
-            }
+        this.renderer.drawEntities(entities, hoveredEntity);
+
+        this.renderer.ctx.save();
+        this.renderer.ctx.translate(-this.renderer.camera.x, -this.renderer.camera.y);
+        this.roseParticles.forEach(p => p.draw(this.renderer.ctx));
+        this.musicNotes.forEach(n => n.draw(this.renderer.ctx));
+        this.floatingTexts.forEach(t => t.draw(this.renderer.ctx));
+        this.renderer.ctx.restore();
+
+        this.renderer.drawLighting(this.localPlayer);
+    }
+
+    updateInventory() {
+        const list = document.getElementById('inventory-list');
+        list.innerHTML = this.inventory.map(i => `<li>${i}</li>`).join('');
+    }
+
+    exitGame() {
+        if (this.localPlayer) {
+            this.switchRoom('office');
+            alert('Returned to Office (Main Lobby)');
         }
+    }
 
-        verifyAdminPassword() {
-            const passwordInput = document.getElementById('admin-password');
-            if (passwordInput.value === '1234') {
-                this.isAdmin = true;
-                document.getElementById('password-modal').classList.add('hidden');
-                this.toggleAdminPanel();
-            } else {
-                alert('Incorrect Password!');
-            }
+    handleAdminIconClick() {
+        if (this.isAdmin) {
+            this.toggleAdminPanel();
+        } else {
+            document.getElementById('password-modal').classList.remove('hidden');
         }
+    }
 
-        toggleAdminPanel() {
-            const panel = document.getElementById('admin-panel');
-            panel.classList.toggle('hidden');
-            if (!panel.classList.contains('hidden')) {
-                this.updateAdminPanel();
-                this.adminInterval = setInterval(() => this.updateAdminPanel(), 2000);
-            } else {
-                if (this.adminInterval) clearInterval(this.adminInterval);
-            }
+    verifyAdminPassword() {
+        const passwordInput = document.getElementById('admin-password');
+        if (passwordInput.value === '1234') {
+            this.isAdmin = true;
+            document.getElementById('password-modal').classList.add('hidden');
+            this.toggleAdminPanel();
+        } else {
+            alert('Incorrect Password!');
         }
+    }
 
-        updateAdminPanel() {
-            const list = document.getElementById('admin-player-list');
-            if (!list) return;
-            list.innerHTML = '';
-
-            if (this.localPlayer) this.createAdminPlayerEntry(list, this.localPlayer, true);
-            Object.values(this.remotePlayers).forEach(p => this.createAdminPlayerEntry(list, p, false));
+    toggleAdminPanel() {
+        const panel = document.getElementById('admin-panel');
+        panel.classList.toggle('hidden');
+        if (!panel.classList.contains('hidden')) {
+            this.updateAdminPanel();
+            this.adminInterval = setInterval(() => this.updateAdminPanel(), 2000);
+        } else {
+            if (this.adminInterval) clearInterval(this.adminInterval);
         }
+    }
 
-        createAdminPlayerEntry(list, p, isLocal) {
-            const div = document.createElement('div');
-            div.className = 'player-row';
-            div.style.display = 'flex';
-            div.style.justifyContent = 'space-between';
-            div.style.padding = '5px';
-            div.style.borderBottom = '1px solid #444';
+    updateAdminPanel() {
+        const list = document.getElementById('admin-player-list');
+        if (!list) return;
+        list.innerHTML = '';
 
-            div.innerHTML = `
+        if (this.localPlayer) this.createAdminPlayerEntry(list, this.localPlayer, true);
+        Object.values(this.remotePlayers).forEach(p => this.createAdminPlayerEntry(list, p, false));
+    }
+
+    createAdminPlayerEntry(list, p, isLocal) {
+        const div = document.createElement('div');
+        div.className = 'player-row';
+        div.style.display = 'flex';
+        div.style.justifyContent = 'space-between';
+        div.style.padding = '5px';
+        div.style.borderBottom = '1px solid #444';
+
+        div.innerHTML = `
             <span>${p.nickname || 'Unknown'} (${p.role})</span>
             ${!isLocal ? `<button onclick="adminCmd('kick', '${p.id}')" style="background:red;color:white;border:none;padding:2px 5px;cursor:pointer;">Kick</button>` : '<span style="color:#aaa;">(You)</span>'}
         `;
-            list.appendChild(div);
+        list.appendChild(div);
+    }
+
+    executeAdminCmd(cmd, arg) {
+        if (!this.isAdmin) return;
+
+        // Broadcast command
+        if (typeof firebase !== 'undefined') {
+            firebase.database().ref('global/cmd').set({
+                cmd: cmd,
+                arg: arg,
+                time: Date.now(),
+                id: Date.now() + '_' + Math.random()
+            });
         }
 
-        executeAdminCmd(cmd, arg) {
-            if (!this.isAdmin) return;
-
-            // Broadcast command
-            if (typeof firebase !== 'undefined') {
-                firebase.database().ref('global/cmd').set({
-                    cmd: cmd,
-                    arg: arg,
-                    time: Date.now(),
-                    id: Date.now() + '_' + Math.random()
-                });
-            }
-
-            // Local execution
-            if (cmd === 'teleport_all') {
-                this.switchRoom(arg);
-            } else if (cmd === 'rose_shower') {
-                this.triggerRoseShower();
-            } else if (cmd === 'speed') {
-                if (this.localPlayer) this.localPlayer.speedMultiplier = parseFloat(arg);
-            } else if (cmd === 'kick') {
-                // Kick command is handled by listeners
-            }
-        }
-
-        triggerRoseShower() {
-            if (this.localPlayer) {
-                for (let i = 0; i < 50; i++) {
-                    setTimeout(() => {
-                        this.roseParticles.push(new RoseParticle(this.localPlayer.pos.x, this.localPlayer.pos.y));
-                    }, i * 50);
-                }
-                // Show notification
-                this.showFloatingText('🌹 ROSE SHOWER! 🌹', this.localPlayer.pos.x, this.localPlayer.pos.y - 100);
-            }
+        // Local execution
+        if (cmd === 'teleport_all') {
+            this.switchRoom(arg);
+        } else if (cmd === 'rose_shower') {
+            this.triggerRoseShower();
+        } else if (cmd === 'speed') {
+            if (this.localPlayer) this.localPlayer.speedMultiplier = parseFloat(arg);
+        } else if (cmd === 'kick') {
+            // Kick command is handled by listeners
         }
     }
+
+    triggerRoseShower() {
+        if (this.localPlayer) {
+            for (let i = 0; i < 50; i++) {
+                setTimeout(() => {
+                    this.roseParticles.push(new RoseParticle(this.localPlayer.pos.x, this.localPlayer.pos.y));
+                }, i * 50);
+            }
+            // Show notification
+            this.showFloatingText('🌹 ROSE SHOWER! 🌹', this.localPlayer.pos.x, this.localPlayer.pos.y - 100);
+        }
+    }
+}
 
 // ============================================================================
 // GLOBAL INITIALIZATION
