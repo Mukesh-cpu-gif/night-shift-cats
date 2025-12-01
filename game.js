@@ -1,4 +1,5 @@
 // Game State
+console.log("Game.js loading...");
 let playerId = localStorage.getItem('night_shift_player_id');
 if (!playerId) {
     playerId = 'player_' + Math.random().toString(36).substr(2, 9);
@@ -13,25 +14,87 @@ let playerRoom = "office"; // office, study, hangout
 let speed = 4;
 let isGameRunning = false;
 let isAdmin = false; // Admin status
+let mazeWalls = [];
+
 
 // Admin Functions
+function handleAdminIconClick() {
+    if (isAdmin) {
+        toggleAdminPanel();
+    } else {
+        document.getElementById('password-modal').classList.remove('hidden');
+    }
+}
+
+function toggleAdminPanel() {
+    const panel = document.getElementById('admin-panel');
+    panel.classList.toggle('hidden');
+    if (!panel.classList.contains('hidden')) {
+        renderAdminPlayerList();
+    }
+}
+
 function verifyAdminPassword() {
     const passwordInput = document.getElementById('admin-password');
     if (passwordInput.value === '1234') {
         isAdmin = true;
         document.getElementById('password-modal').classList.add('hidden');
-        document.getElementById('admin-controls').classList.remove('hidden');
-        startScreen.style.display = 'none';
-        isGameRunning = true;
-        initGame();
+        toggleAdminPanel();
+        document.getElementById('admin-icon').style.display = 'block';
+
+        // Start game if not already running
+        if (!isGameRunning) {
+            startScreen.style.display = 'none';
+            isGameRunning = true;
+            initGame();
+        }
     } else {
         alert('Incorrect Password!');
     }
 }
 
+function renderAdminPlayerList() {
+    const list = document.getElementById('admin-player-list');
+    list.innerHTML = '';
+
+    Object.keys(players).forEach(id => {
+        const p = players[id].data;
+        const item = document.createElement('div');
+        item.className = 'player-item';
+        item.innerHTML = `
+            <div class="player-info">
+                <div class="player-role-icon" style="background: ${p.role === 'seeker' ? '#e74c3c' : '#3498db'}"></div>
+                <span>${p.nickname} (${p.role || 'spectator'})</span>
+            </div>
+            <button class="kick-btn" onclick="kickPlayer('${id}')">Kick</button>
+        `;
+        list.appendChild(item);
+    });
+}
+
 function kickPlayer(targetId) {
-    if (!isAdmin) return;
+    if (!isAdmin || !targetId) return;
     db.ref('rooms/default/players/' + targetId).remove();
+    renderAdminPlayerList(); // Refresh list
+}
+
+function teleportAllPlayers(targetRoom) {
+    if (!isAdmin) return;
+    // Update all players' room in Firebase (requires backend rule changes or client-side loop)
+    // Since we don't have backend rules preventing this, we can try updating everyone.
+    // However, usually clients only update themselves. 
+    // A better approach for "Teleport All" without backend logic is to set a global "forceTeleport" flag in Firebase.
+    // For now, let's just update the local player and broadcast a chat message command that clients listen to?
+    // OR: Iterate and update everyone (might fail if rules are strict, but let's try).
+
+    Object.keys(players).forEach(id => {
+        db.ref('rooms/default/players/' + id).update({
+            room: targetRoom,
+            x: window.innerWidth / 2,
+            y: window.innerHeight / 2,
+            lastUpdated: firebase.database.ServerValue.TIMESTAMP
+        });
+    });
 }
 
 function updateGameSpeed(newSpeed) {
@@ -57,58 +120,250 @@ let playersRef;
 let myPlayerRef;
 let chatRef;
 
-// Maze Game State
-let mazeRole = null; // 'seeker' or 'hider'
-let mazeWalls = [];
-let mazeTimer = 0;
-let mazeScore = 0;
-let mazeGameActive = false;
+
+
+// DOM Elements
+const startScreen = document.getElementById('start-screen');
+const world = document.getElementById('world');
+const connectionStatus = document.getElementById('connection-status');
+const nicknameInput = document.getElementById('nickname');
+const personalTimerUi = document.getElementById('personal-timer-ui');
+const timerDisplay = document.getElementById('timer-display');
+const timerControls = document.getElementById('timer-controls');
+const stopBtn = document.getElementById('stop-btn');
+const chatUi = document.getElementById('chat-ui');
+const chatMessages = document.getElementById('chat-messages');
+const chatInput = document.getElementById('chat-input');
+
+// Clock Hands
+const hourHand = document.querySelector('.hand.hour');
+const minuteHand = document.querySelector('.hand.minute');
+const secondHand = document.querySelector('.hand.second');
+
+// Rooms
+const rooms = {
+    office: document.getElementById('room-office'),
+    study: document.getElementById('room-study'),
+    hangout: document.getElementById('room-hangout'),
+    matchi: document.getElementById('room-matchi'),
+    skyview: document.getElementById('room-skyview')
+};
+
+// Desk Zones (Study Room) - Dynamic
+function getDeskZones() {
+    const w = window.innerWidth;
+    const h = window.innerHeight;
+    return [
+        { x: w * 0.2, y: h * 0.25 }, // Top Left
+        { x: w * 0.8, y: h * 0.25 }, // Top Right
+        { x: w * 0.2, y: h * 0.75 }, // Bottom Left
+        { x: w * 0.8, y: h * 0.75 }  // Bottom Right
+    ];
+}
 
 // Start Screen Flow Function
 function proceedToGenderSelection() {
-    const nameInput = document.getElementById('nickname');
-    const name = nameInput.value.trim();
+    try {
+        console.log("Proceeding to gender selection...");
+        const nameInput = document.getElementById('nickname');
+        if (!nameInput) {
+            alert("Error: Nickname input not found!");
+            return;
+        }
 
-    if (!name) {
-        alert('Please enter your name first!');
-        return;
+        const name = nameInput.value.trim();
+        console.log("Nickname entered:", name);
+
+        if (!name) {
+            alert('Please enter your name first!');
+            return;
+        }
+
+        playerNickname = name;
+
+        // Hide name step, show gender step
+        const nameStep = document.getElementById('name-step');
+        const genderStep = document.getElementById('gender-step');
+
+        if (!nameStep || !genderStep) {
+            alert("Error: Steps not found in DOM");
+            return;
+        }
+
+        nameStep.classList.add('hidden');
+        genderStep.classList.remove('hidden');
+        console.log("Transition complete.");
+    } catch (e) {
+        alert("Error in proceedToGenderSelection: " + e.message);
+        console.error(e);
     }
-
-    playerNickname = name;
-
-    // Hide name step, show gender step
-    document.getElementById('name-step').classList.add('hidden');
-    document.getElementById('gender-step').classList.remove('hidden');
 }
 
-// Maze Game Functions
-function selectMazeRole(role) {
-    mazeRole = role;
+function startGame(role) {
+    const name = nicknameInput.value.trim();
+    if (name) playerNickname = name;
+    playerRole = role;
 
-    // Hide role selection, show game status
-    document.getElementById('maze-role-selection').classList.add('hidden');
-    document.getElementById('maze-status').classList.remove('hidden');
+    // Check for Admin Login
+    if (playerNickname.toLowerCase() === 'mukesh') {
+        document.getElementById('password-modal').classList.remove('hidden');
+        return; // Stop here, wait for password
+    }
 
-    // Update role display
-    const roleDisplay = document.getElementById('maze-role-display');
-    if (role === 'seeker') {
-        roleDisplay.textContent = '🔍 You are the SEEKER';
-        roleDisplay.style.color = '#e74c3c';
+    // Check for unique username
+    if (typeof firebase !== 'undefined') {
+        const dbRef = firebase.database().ref('rooms/default/players');
+        dbRef.once('value').then((snapshot) => {
+            const players = snapshot.val() || {};
+            const isTaken = Object.values(players).some(p =>
+                p.nickname && p.nickname.toLowerCase() === playerNickname.toLowerCase()
+            );
+
+            if (isTaken) {
+                alert('Username already taken! Please choose another one.');
+            } else {
+                startScreen.style.display = 'none';
+                isGameRunning = true;
+                initGame();
+            }
+        }).catch((error) => {
+            console.error("Error checking username:", error);
+            // Fallback to allow game start if check fails
+            startScreen.style.display = 'none';
+            isGameRunning = true;
+            initGame();
+        });
     } else {
-        roleDisplay.textContent = '🙈 You are a HIDER';
-        roleDisplay.style.color = '#3498db';
+        // Fallback for local testing without Firebase
+        startScreen.style.display = 'none';
+        isGameRunning = true;
+        initGame();
+    }
+}
+
+// Initialize Game
+function initGame() {
+    // Prevent stuck at 0,0
+    if (playerX === 0 && playerY === 0) {
+        playerX = window.innerWidth / 2;
+        playerY = window.innerHeight / 2;
     }
 
-    mazeGameActive = true;
+    // Initialize Firebase
+    if (typeof firebase !== 'undefined') {
+        try {
+            if (!firebase.apps.length && typeof firebaseConfig !== 'undefined') {
+                firebase.initializeApp(firebaseConfig);
+            }
 
-    // Sync role to Firebase
-    if (myPlayerRef) {
-        myPlayerRef.update({ mazeRole: role });
+            db = firebase.database();
+            playersRef = db.ref('rooms/default/players');
+            myPlayerRef = playersRef.child(playerId);
+            chatRef = db.ref('rooms/default/chat');
+
+            updateMyPosition();
+            myPlayerRef.onDisconnect().remove();
+            setupPlayerListeners();
+            setupChatListener();
+
+            // Listen for being kicked
+            myPlayerRef.on('value', (snapshot) => {
+                if (snapshot.val() === null && isGameRunning) {
+                    alert('You have been kicked by an admin!');
+                    location.reload();
+                }
+            });
+
+            db.ref('.info/connected').on('value', (snap) => {
+                if (snap.val() === true) connectionStatus.classList.add('hidden');
+                else connectionStatus.classList.remove('hidden');
+            });
+
+        } catch (e) {
+            console.error("Firebase error:", e);
+            alert("Firebase error. Check console.");
+        }
     }
+
+    // Start Clock
+    setInterval(updateClock, 1000);
+    updateClock();
+
+    // Initialize maze walls for collision detection
+    initMazeWalls();
+
+    requestAnimationFrame(gameLoop);
+}
+
+
+
+// Mobile Controls
+const btnUp = document.getElementById('btn-up');
+const btnDown = document.getElementById('btn-down');
+const btnLeft = document.getElementById('btn-left');
+const btnRight = document.getElementById('btn-right');
+
+function setupMobileBtn(btn, key) {
+    const start = (e) => { e.preventDefault(); keys[key] = true; };
+    const end = (e) => { e.preventDefault(); keys[key] = false; };
+
+    btn.addEventListener('touchstart', start);
+    btn.addEventListener('touchend', end);
+    btn.addEventListener('mousedown', start); // For desktop testing
+    btn.addEventListener('mouseup', end);
+    btn.addEventListener('mouseleave', end);
+}
+
+if (btnUp) {
+    setupMobileBtn(btnUp, 'ArrowUp');
+    setupMobileBtn(btnDown, 'ArrowDown');
+    setupMobileBtn(btnLeft, 'ArrowLeft');
+    setupMobileBtn(btnRight, 'ArrowRight');
+}
+
+// Music Logic
+const bgMusic = document.getElementById('bg-music');
+const musicBtn = document.getElementById('music-toggle');
+const vinylDisc = document.getElementById('vinyl-disc');
+
+function toggleMusic() {
+    if (bgMusic.paused) {
+        bgMusic.play().catch(e => console.log("Audio play failed:", e));
+        musicBtn.innerText = "🎵 Pause Music";
+        if (vinylDisc) vinylDisc.classList.add('spinning');
+    } else {
+        bgMusic.pause();
+        musicBtn.innerText = "🎵 Play Lofi";
+        if (vinylDisc) vinylDisc.classList.remove('spinning');
+    }
+}
+
+// Game Loop
+let lastNetworkUpdate = 0;
+let lastCleanup = 0;
+
+function cleanupStalePlayers() {
+    const now = Date.now();
+    Object.keys(players).forEach(id => {
+        if (id === playerId) return; // Don't remove self
+
+        // If lastUpdated is older than 10 seconds, remove
+        if (players[id].data.lastUpdated && (now - players[id].data.lastUpdated > 10000)) {
+            removePlayerElement(id);
+        }
+    });
 }
 
 // Initialize maze walls using Recursive Backtracking (DFS)
 function initMazeWalls() {
+    if (playerRoom !== 'skyview') return;
+
+    const container = document.querySelector('.maze-container');
+    if (!container) return;
+    container.innerHTML = ''; // Clear old walls immediately
+
+    mazeWalls = []; // Reset collision array
+
     const w = window.innerWidth;
     const h = window.innerHeight;
 
@@ -182,12 +437,7 @@ function initMazeWalls() {
     }
 
     // Convert grid walls to collision rects and render
-    mazeWalls = [];
-    const container = document.querySelector('.maze-container');
-    if (container) container.innerHTML = ''; // Clear old walls
-
     const thick = 6;
-
     grid.forEach(cell => {
         const x = cell.c * cellW;
         const y = cell.r * cellH;
@@ -233,192 +483,6 @@ function checkMazeCollision(newX, newY) {
         }
     }
     return false;
-}
-
-// DOM Elements
-const startScreen = document.getElementById('start-screen');
-const world = document.getElementById('world');
-const connectionStatus = document.getElementById('connection-status');
-const nicknameInput = document.getElementById('nickname');
-const personalTimerUi = document.getElementById('personal-timer-ui');
-const timerDisplay = document.getElementById('timer-display');
-const timerControls = document.getElementById('timer-controls');
-const stopBtn = document.getElementById('stop-btn');
-const chatUi = document.getElementById('chat-ui');
-const chatMessages = document.getElementById('chat-messages');
-const chatInput = document.getElementById('chat-input');
-
-// Clock Hands
-const hourHand = document.querySelector('.hand.hour');
-const minuteHand = document.querySelector('.hand.minute');
-const secondHand = document.querySelector('.hand.second');
-
-// Rooms
-const rooms = {
-    office: document.getElementById('room-office'),
-    study: document.getElementById('room-study'),
-    hangout: document.getElementById('room-hangout'),
-    matchi: document.getElementById('room-matchi'),
-    skyview: document.getElementById('room-skyview')
-};
-
-// Desk Zones (Study Room) - Dynamic
-function getDeskZones() {
-    const w = window.innerWidth;
-    const h = window.innerHeight;
-    return [
-        { x: w * 0.2, y: h * 0.25 }, // Top Left
-        { x: w * 0.8, y: h * 0.25 }, // Top Right
-        { x: w * 0.2, y: h * 0.75 }, // Bottom Left
-        { x: w * 0.8, y: h * 0.75 }  // Bottom Right
-    ];
-}
-
-// Initialize Game
-function initGame() {
-    // Initialize Firebase
-    if (typeof firebase !== 'undefined') {
-        try {
-            if (!firebase.apps.length && typeof firebaseConfig !== 'undefined') {
-                firebase.initializeApp(firebaseConfig);
-            }
-
-            db = firebase.database();
-            playersRef = db.ref('rooms/default/players');
-            myPlayerRef = playersRef.child(playerId);
-            chatRef = db.ref('rooms/default/chat');
-
-            updateMyPosition();
-            myPlayerRef.onDisconnect().remove();
-            setupPlayerListeners();
-            setupChatListener();
-
-            // Listen for being kicked
-            myPlayerRef.on('value', (snapshot) => {
-                if (snapshot.val() === null && isGameRunning) {
-                    alert('You have been kicked by an admin!');
-                    location.reload();
-                }
-            });
-
-            db.ref('.info/connected').on('value', (snap) => {
-                if (snap.val() === true) connectionStatus.classList.add('hidden');
-                else connectionStatus.classList.remove('hidden');
-            });
-
-        } catch (e) {
-            console.error("Firebase error:", e);
-            alert("Firebase error. Check console.");
-        }
-    }
-
-    // Start Clock
-    setInterval(updateClock, 1000);
-    updateClock();
-
-    // Initialize maze walls for collision detection
-    initMazeWalls();
-
-    requestAnimationFrame(gameLoop);
-}
-
-function startGame(role) {
-    const name = nicknameInput.value.trim();
-    if (name) playerNickname = name;
-    playerRole = role;
-
-    // Check for Admin Login
-    if (playerNickname.toLowerCase() === 'mukesh') {
-        document.getElementById('password-modal').classList.remove('hidden');
-        return; // Stop here, wait for password
-    }
-
-    // Check for unique username
-    if (typeof firebase !== 'undefined') {
-        const dbRef = firebase.database().ref('rooms/default/players');
-        dbRef.once('value').then((snapshot) => {
-            const players = snapshot.val() || {};
-            const isTaken = Object.values(players).some(p =>
-                p.nickname && p.nickname.toLowerCase() === playerNickname.toLowerCase()
-            );
-
-            if (isTaken) {
-                alert('Username already taken! Please choose another one.');
-            } else {
-                startScreen.style.display = 'none';
-                isGameRunning = true;
-                initGame();
-            }
-        }).catch((error) => {
-            console.error("Error checking username:", error);
-            // Fallback to allow game start if check fails
-            startScreen.style.display = 'none';
-            isGameRunning = true;
-            initGame();
-        });
-    } else {
-        // Fallback for local testing without Firebase
-        startScreen.style.display = 'none';
-        isGameRunning = true;
-        initGame();
-    }
-}
-
-// Mobile Controls
-const btnUp = document.getElementById('btn-up');
-const btnDown = document.getElementById('btn-down');
-const btnLeft = document.getElementById('btn-left');
-const btnRight = document.getElementById('btn-right');
-
-function setupMobileBtn(btn, key) {
-    const start = (e) => { e.preventDefault(); keys[key] = true; };
-    const end = (e) => { e.preventDefault(); keys[key] = false; };
-
-    btn.addEventListener('touchstart', start);
-    btn.addEventListener('touchend', end);
-    btn.addEventListener('mousedown', start); // For desktop testing
-    btn.addEventListener('mouseup', end);
-    btn.addEventListener('mouseleave', end);
-}
-
-if (btnUp) {
-    setupMobileBtn(btnUp, 'ArrowUp');
-    setupMobileBtn(btnDown, 'ArrowDown');
-    setupMobileBtn(btnLeft, 'ArrowLeft');
-    setupMobileBtn(btnRight, 'ArrowRight');
-}
-
-// Music Logic
-const bgMusic = document.getElementById('bg-music');
-const musicBtn = document.getElementById('music-toggle');
-const vinylDisc = document.getElementById('vinyl-disc');
-
-function toggleMusic() {
-    if (bgMusic.paused) {
-        bgMusic.play().catch(e => console.log("Audio play failed:", e));
-        musicBtn.innerText = "🎵 Pause Music";
-        if (vinylDisc) vinylDisc.classList.add('spinning');
-    } else {
-        bgMusic.pause();
-        musicBtn.innerText = "🎵 Play Lofi";
-        if (vinylDisc) vinylDisc.classList.remove('spinning');
-    }
-}
-
-// Game Loop
-let lastNetworkUpdate = 0;
-let lastCleanup = 0;
-
-function cleanupStalePlayers() {
-    const now = Date.now();
-    Object.keys(players).forEach(id => {
-        if (id === playerId) return; // Don't remove self
-
-        // If lastUpdated is older than 10 seconds, remove
-        if (players[id].data.lastUpdated && (now - players[id].data.lastUpdated > 10000)) {
-            removePlayerElement(id);
-        }
-    });
 }
 
 function gameLoop() {
@@ -502,6 +566,19 @@ function gameLoop() {
     requestAnimationFrame(gameLoop);
 }
 
+// Safe Spawn Logic
+function getSafeSpawn() {
+    const w = window.innerWidth;
+    const h = window.innerHeight;
+    const cols = 16;
+    const rows = 9;
+    const cellW = w / cols;
+    const cellH = h / rows;
+
+    // Center of first cell (0,0)
+    return { x: cellW / 2, y: cellH / 2 };
+}
+
 function checkRoomTransitions() {
     const w = window.innerWidth;
     const h = window.innerHeight;
@@ -520,7 +597,8 @@ function checkRoomTransitions() {
     }
     // Office -> Skyview (bottom-right door: bottom 10%, right 5%)
     else if (playerRoom === 'office' && playerY > h * 0.85 && playerX > w * 0.85) {
-        switchRoom('skyview', w * 0.1, h * 0.1);
+        // Spawn in center to avoid immediate exit loop
+        switchRoom('skyview', w * 0.5, h * 0.5);
     }
 
     // Back to Office (from any room)
@@ -529,6 +607,10 @@ function checkRoomTransitions() {
         if (playerY > h * 0.9 && playerX > w * 0.4 && playerX < w * 0.6) {
             switchRoom('office', w * 0.5, h * 0.5);
         }
+    }
+    // Back from Skyview (Top Left)
+    else if (playerRoom === 'skyview' && playerX < 50 && playerY < 50) {
+        switchRoom('office', w * 0.9, h * 0.9);
     }
 }
 
@@ -561,6 +643,20 @@ function switchRoom(newRoom, newX, newY) {
     }
 
     refreshPlayerVisibility();
+}
+
+function selectMazeRole(role) {
+    playerRole = role;
+    updateMyPosition(); // Sync to Firebase
+
+    // Update UI
+    const selectionUi = document.getElementById('maze-role-selection');
+    const statusUi = document.getElementById('maze-status');
+    const roleDisplay = document.getElementById('maze-role-display');
+
+    if (selectionUi) selectionUi.classList.add('hidden');
+    if (statusUi) statusUi.classList.remove('hidden');
+    if (roleDisplay) roleDisplay.innerText = `You are a: ${role.toUpperCase()}`;
 }
 
 function checkDeskProximity() {
@@ -777,10 +873,16 @@ function refreshPlayerVisibility() {
     });
 }
 
-// Handle resize events to update walls
+// Handle resize events to update walls (Debounced)
+let resizeTimeout;
 window.addEventListener('resize', () => {
-    initMazeWalls();
+    clearTimeout(resizeTimeout);
+    resizeTimeout = setTimeout(() => {
+        if (playerRoom === 'skyview') {
+            initMazeWalls();
+        }
+    }, 200);
 });
 
 // Initial call
-initMazeWalls();
+// initMazeWalls(); // Removed initial call to prevent early rendering issues, called in switchRoom

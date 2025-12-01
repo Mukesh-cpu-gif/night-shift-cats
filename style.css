@@ -1026,6 +1026,45 @@ h1 {
     z-index: 3;
 }
 
+/* Admin Icon */
+#admin-icon {
+    position: absolute;
+    bottom: 20px;
+    right: 20px;
+    font-size: 24px;
+    cursor: pointer;
+    opacity: 0.3;
+    transition: opacity 0.3s;
+    z-index: 1000;
+    pointer-events: auto;
+    display: none;
+}
+
+#admin-icon:hover {
+    opacity: 1;
+}
+
+/* Admin Modal */
+.modal {
+    position: fixed;
+    top: 0; left: 0;
+    width: 100%; height: 100%;
+    background: rgba(0,0,0,0.8);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 2000;
+}
+
+.modal.hidden { display: none; }
+
+.modal-content {
+    background: #fff;
+    padding: 20px;
+    border-radius: 8px;
+    text-align: center;
+}
+
 /* Add visible marker for rotation */
 .vinyl-disc::after {
     content: '';
@@ -1481,3 +1520,128 @@ h1 {
     margin: 10px 0;
 }
 
+
+/* New Admin UI */
+.admin-content {
+    background: rgba(255, 255, 255, 0.95);
+    backdrop-filter: blur(10px);
+    width: 500px;
+    max-width: 90%;
+    border-radius: 16px;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+    padding: 0;
+    overflow: hidden;
+    text-align: left;
+}
+
+.admin-header {
+    background: linear-gradient(135deg, #4361ee 0%, #3f37c9 100%);
+    color: white;
+    padding: 15px 20px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.admin-header h2 {
+    margin: 0;
+    font-size: 18px;
+}
+
+.close-btn {
+    background: none;
+    border: none;
+    color: white;
+    font-size: 24px;
+    cursor: pointer;
+}
+
+.admin-section {
+    padding: 20px;
+    border-bottom: 1px solid #eee;
+}
+
+.admin-section h3 {
+    margin-top: 0;
+    color: #333;
+    font-size: 14px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    margin-bottom: 15px;
+}
+
+.action-buttons {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+    margin-bottom: 15px;
+}
+
+.admin-btn {
+    flex: 1;
+    padding: 10px;
+    border: none;
+    border-radius: 8px;
+    background: #f0f2f5;
+    color: #333;
+    font-weight: bold;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.admin-btn:hover {
+    background: #e0e2e5;
+    transform: translateY(-2px);
+}
+
+.player-list {
+    max-height: 200px;
+    overflow-y: auto;
+    background: #f8f9fa;
+    border-radius: 8px;
+    padding: 10px;
+}
+
+.player-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 8px;
+    border-bottom: 1px solid #eee;
+}
+
+.player-item:last-child {
+    border-bottom: none;
+}
+
+.player-info {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.player-role-icon {
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    background: #ccc;
+}
+
+.kick-btn {
+    background: #ff4757;
+    color: white;
+    border: none;
+    padding: 5px 10px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 12px;
+}
+
+.kick-btn:hover {
+    background: #ff6b81;
+}
+
+/* Utility Classes */
+.hidden {
+    display: none !important;
+}

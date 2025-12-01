@@ -9,6 +9,14 @@
     <!-- Firebase v8 (works with your game.js) -->
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
+    
+    <!-- Debugging Error Handler -->
+    <script>
+        window.onerror = function(msg, url, line, col, error) {
+            alert("Error: " + msg + "\nLine: " + line + "\nCol: " + col);
+            return false;
+        };
+    </script>
 </head>
 
 <body>
@@ -247,6 +255,11 @@
                 </div>
             </div>
 
+            <!-- Admin Icon -->
+            <div id="admin-icon" onclick="handleAdminIconClick()">
+                🛡️
+            </div>
+
 
         </div>
 
@@ -259,15 +272,33 @@
             </div>
         </div>
 
-        <!-- Admin Controls -->
-        <div id="admin-controls" class="hidden">
-            <h3>Admin Panel</h3>
-            <div class="control-group">
-                <label>Speed:</label>
-                <input type="range" min="1" max="20" value="4" onchange="updateGameSpeed(this.value)">
-            </div>
-            <div class="control-group">
-                <button onclick="kickPlayer(prompt('Enter Player ID to kick:'))">Kick Player</button>
+        <!-- Admin Panel Modal -->
+        <div id="admin-panel" class="modal hidden">
+            <div class="modal-content admin-content">
+                <div class="admin-header">
+                    <h2>🛡️ Admin Command Center</h2>
+                    <button class="close-btn" onclick="toggleAdminPanel()">×</button>
+                </div>
+                
+                <div class="admin-section">
+                    <h3>Global Actions</h3>
+                    <div class="action-buttons">
+                        <button class="admin-btn" onclick="teleportAllPlayers('office')">🏠 All to Office</button>
+                        <button class="admin-btn" onclick="teleportAllPlayers('skyview')">🌌 All to Maze</button>
+                        <button class="admin-btn" onclick="teleportAllPlayers('matchi')">💃 All to Disco</button>
+                    </div>
+                    <div class="control-group">
+                        <label>Game Speed:</label>
+                        <input type="range" min="1" max="20" value="4" onchange="updateGameSpeed(this.value)">
+                    </div>
+                </div>
+
+                <div class="admin-section">
+                    <h3>Active Players</h3>
+                    <div id="admin-player-list" class="player-list">
+                        <!-- Populated by JS -->
+                    </div>
+                </div>
             </div>
         </div>
 
