@@ -1,52 +1,102 @@
 /**
- * Night Shift Cats - Complete Game Engine
- * Full Canvas-based Multiplayer Game with Interactive Objects
+ * NIGHT SHIFT - MULTIPLAYER GAME ENGINE
+ * 
+ * ASSET CHECKLIST
+ * Place these images in an 'assets' folder next to index.html:
+ * 
+ * Backgrounds:
+ * - bg_office.png
+ * - bg_study.png
+ * - bg_hangout.png
+ * - bg_matchi.png
+ * - bg_skyview.png
+ * 
+ * Characters:
+ * - char_boy.png
+ * - char_girl.png
+ * 
+ * Props:
+ * - prop_desk_back.png
+ * - prop_desk_front.png
+ * - prop_plant.png
+ * - prop_bookshelf.png
+ * - prop_rug_round.png
+ * - prop_coffee_machine.png
+ * - prop_jukebox.png
+ * - prop_door_frame.png
+ * - prop_computer.png
+ * - prop_blueberry.png
  */
 
-// ============================================================================
-// CONFIGURATION
-// ============================================================================
 const CONFIG = {
+    WORLD_WIDTH: 1600,
+    WORLD_HEIGHT: 900,
     PLAYER_SPEED: 200,
-    TICK_RATE: 15,
-    WORLD_SIZE: 1200,
+    TICK_RATE: 30,
     COLORS: {
-        OFFICE_BG: '#16213e',
-        STUDY_BG: '#2c1a1d',
-        HANGOUT_BG: '#1a237e',
-        MATCHI_BG: '#1a1a2e',
-        SKYVIEW_BG: '#000000',
-        BOY: '#4361ee',
-        GIRL: '#f72585',
-        WOOD: '#5d4037',
-        SCREEN: '#00ffff',
-        RUG: '#8b4513'
+        OFFICE_BG: '#2c3e50',
+        STUDY_BG: '#34495e',
+        HANGOUT_BG: '#1a252f',
+        MATCHI_BG: '#000000',
+        SKYVIEW_BG: '#87CEEB',
+        BOY: '#3498db',
+        GIRL: '#e91e63',
+        WOOD: '#8d6e63',
+        SCREEN: '#00ffff'
     }
 };
 
+const ASSETS_LIST = {
+    // Backgrounds (We changed these to .jpg to match your files)
+    bg_office: 'assets/bg_office.jpg',
+    bg_study: 'assets/bg_study.jpg',
+    bg_hangout: 'assets/bg_hangout.jpg',
+    bg_skyview: 'assets/bg_skyview.jpg',
+
+    // Make sure you renamed 'matchi room' to 'bg_matchi.jpg' inside the assets folder!
+    // If it's still a PNG, change this line to 'assets/bg_matchi.png'
+    bg_matchi: 'assets/bg_matchi.jpg',
+
+    // Characters (Keep these as .png for transparency)
+    char_boy: 'assets/char_boy.png',
+    char_girl: 'assets/char_girl.png',
+
+    // Props (Keep these as .png for transparency)
+    prop_desk_back: 'assets/prop_desk.png',
+    prop_desk_front: 'assets/prop_desk.png',
+    prop_plant: 'assets/prop_plant.png',
+    prop_bookshelf: 'assets/prop_desk.png',
+    prop_rug_round: 'assets/prop_rug.png',
+    prop_coffee_machine: 'assets/prop_coffee.png',
+    prop_jukebox: 'assets/prop_jukebox.png',
+    prop_door_frame: 'assets/prop_door.png',
+    prop_computer: 'assets/prop_desk.png',
+    prop_blueberry: 'assets/prop_desk.png'
+};
+
 // ============================================================================
-// UTILITY CLASSES
+// MATH UTILS
 // ============================================================================
 class Vector2 {
-    constructor(x = 0, y = 0) {
+    constructor(x, y) {
         this.x = x;
         this.y = y;
     }
     add(v) { return new Vector2(this.x + v.x, this.y + v.y); }
     sub(v) { return new Vector2(this.x - v.x, this.y - v.y); }
-    mult(n) { return new Vector2(this.x * n, this.y * n); }
+    mult(s) { return new Vector2(this.x * s, this.y * s); }
     mag() { return Math.sqrt(this.x * this.x + this.y * this.y); }
     normalize() {
         const m = this.mag();
-        return m === 0 ? new Vector2(0, 0) : new Vector2(this.x / m, this.y / m);
+        return m === 0 ? new Vector2(0, 0) : this.mult(1 / m);
     }
+    dist(v) { return this.sub(v).mag(); }
     lerp(v, t) {
         return new Vector2(
             this.x + (v.x - this.x) * t,
             this.y + (v.y - this.y) * t
         );
     }
-    dist(v) { return Math.sqrt(Math.pow(this.x - v.x, 2) + Math.pow(this.y - v.y, 2)); }
 }
 
 // ============================================================================
@@ -55,42 +105,34 @@ class Vector2 {
 class AssetManager {
     constructor() {
         this.images = {};
-        this.loaded = false;
+        this.loadedCount = 0;
+        this.totalCount = Object.keys(ASSETS_LIST).length;
         this.useFallback = false;
     }
 
-    loadImage(key, src) {
-        return new Promise((resolve) => {
-            const img = new Image();
-            const timeout = setTimeout(() => {
-                console.warn(`Asset ${key} timed out, using fallback`);
-                this.useFallback = true;
-                resolve(false);
-            }, 3000);
-
-            img.onload = () => {
-                clearTimeout(timeout);
-                this.images[key] = img;
-                console.log(`Loaded: ${key}`);
-                resolve(true);
-            };
-
-            img.onerror = (e) => {
-                clearTimeout(timeout);
-                console.error(`❌ FAILED TO LOAD ASSET: ${key} from ${src}`);
-                console.error('Error details:', e);
-                console.error('Check if file exists and path is correct!');
-                this.useFallback = true;
-                resolve(false);
-            };
-
-            img.src = src;
-        });
-    }
-
     async init() {
-        await this.loadImage('matchiRoom', 'matchi room.png');
-        this.loaded = true;
+        const promises = Object.entries(ASSETS_LIST).map(([key, src]) => {
+            return new Promise((resolve) => {
+                const img = new Image();
+                img.onload = () => {
+                    this.images[key] = img;
+                    this.loadedCount++;
+                    resolve();
+                };
+                img.onerror = () => {
+                    console.warn(`Failed to load asset: ${key} (${src})`);
+                    this.images[key] = null; // Mark as missing
+                    resolve();
+                };
+                img.src = src;
+            });
+        });
+
+        await Promise.all(promises);
+        console.log(`Assets loaded: ${this.loadedCount}/${this.totalCount}`);
+        if (this.loadedCount < this.totalCount) {
+            this.useFallback = true;
+        }
     }
 
     get(key) {
@@ -123,6 +165,11 @@ class InputManager {
                 }
             }
             return;
+        }
+
+        // Toggle Debug Mode
+        if (e.key === '0') {
+            if (window.game) window.game.debugMode = !window.game.debugMode;
         }
 
         this.keys[e.key] = true;
@@ -303,7 +350,6 @@ class MazeGenerator {
                 stack.push(next);
             }
         }
-
         return this.grid;
     }
 
@@ -331,13 +377,24 @@ class MazeGenerator {
 // ============================================================================
 // GAME ENTITIES
 // ============================================================================
-class Player {
+class Entity {
+    constructor(x, y) {
+        this.pos = new Vector2(x, y);
+        this.z = 0; // For Y-sorting
+    }
+
+    getSortY() {
+        return this.pos.y;
+    }
+}
+
+class Player extends Entity {
     constructor(id, data, isLocal = false) {
+        super(data.x, data.y);
         this.id = id;
         this.nickname = data.nickname;
         this.role = data.role;
         this.room = data.room;
-        this.pos = new Vector2(data.x, data.y);
         this.targetPos = new Vector2(data.x, data.y);
         this.isLocal = isLocal;
         this.color = this.role === 'boy' ? CONFIG.COLORS.BOY : CONFIG.COLORS.GIRL;
@@ -345,6 +402,9 @@ class Player {
         this.isMoving = false;
         this.speedMultiplier = 1.0;
         this.speedParticles = [];
+        this.speedParticles = [];
+        this.lastSeen = Date.now();
+        this.radius = 12; // Smaller radius for smoother movement
     }
 
     update(dt) {
@@ -358,7 +418,7 @@ class Player {
             this.isMoving = dist > 1;
         }
 
-        this.breathePhase += dt * 2;
+        this.breathePhase += dt * 10; // Faster bobbing
 
         // Speed particles
         if (this.speedMultiplier > 1 && this.isMoving) {
@@ -374,150 +434,127 @@ class Player {
         this.speedParticles = this.speedParticles.filter(p => p.life > 0);
     }
 
-    draw(ctx) {
-        const breatheScale = this.isMoving ? 1 : 1 + Math.sin(this.breathePhase) * 0.05;
-
-        ctx.save();
-        ctx.translate(this.pos.x, this.pos.y);
-        ctx.scale(breatheScale, breatheScale);
-        ctx.translate(-this.pos.x, -this.pos.y);
+    draw(ctx, assets) {
+        const bobOffset = this.isMoving ? Math.sin(this.breathePhase) * 3 : 0;
 
         // Shadow
         ctx.fillStyle = 'rgba(0,0,0,0.3)';
         ctx.beginPath();
-        ctx.ellipse(this.pos.x, this.pos.y + 20, 15, 5, 0, 0, Math.PI * 2);
+        ctx.ellipse(this.pos.x, this.pos.y + 5, 15, 5, 0, 0, Math.PI * 2);
         ctx.fill();
 
-        // Cat Head with gradient
-        const gradient = ctx.createRadialGradient(this.pos.x - 5, this.pos.y - 5, 5, this.pos.x, this.pos.y, 25);
-        gradient.addColorStop(0, this.color);
-        gradient.addColorStop(1, this.role === 'boy' ? '#1e3a8a' : '#9f1239');
-        ctx.fillStyle = gradient;
-        ctx.beginPath();
-        ctx.ellipse(this.pos.x, this.pos.y, 22, 20, 0, 0, Math.PI * 2);
-        ctx.fill();
+        // Sprite
+        const spriteKey = this.role === 'boy' ? 'char_boy' : 'char_girl';
+        const img = assets.get(spriteKey);
 
-        // Ears
-        ctx.beginPath();
-        ctx.moveTo(this.pos.x - 18, this.pos.y - 12);
-        ctx.lineTo(this.pos.x - 25, this.pos.y - 30);
-        ctx.lineTo(this.pos.x - 8, this.pos.y - 15);
-        ctx.fill();
+        if (img) {
+            const size = 60; // Fixed height
+            const ratio = img.width / img.height;
+            const w = size * ratio;
+            const h = size;
+            // Draw relative to feet (pos.x, pos.y)
+            ctx.drawImage(img, this.pos.x - w / 2, this.pos.y - h + bobOffset, w, h);
+        } else {
+            // Fallback
+            ctx.fillStyle = this.color;
+            ctx.beginPath();
+            ctx.arc(this.pos.x, this.pos.y - 20 + bobOffset, 20, 0, Math.PI * 2);
+            ctx.fill();
 
-        ctx.beginPath();
-        ctx.moveTo(this.pos.x + 18, this.pos.y - 12);
-        ctx.lineTo(this.pos.x + 25, this.pos.y - 30);
-        ctx.lineTo(this.pos.x + 8, this.pos.y - 15);
-        ctx.fill();
+            // Ears
+            ctx.beginPath();
+            ctx.moveTo(this.pos.x - 15, this.pos.y - 30 + bobOffset);
+            ctx.lineTo(this.pos.x - 25, this.pos.y - 50 + bobOffset);
+            ctx.lineTo(this.pos.x - 5, this.pos.y - 35 + bobOffset);
+            ctx.fill();
+            ctx.beginPath();
+            ctx.moveTo(this.pos.x + 15, this.pos.y - 30 + bobOffset);
+            ctx.lineTo(this.pos.x + 25, this.pos.y - 50 + bobOffset);
+            ctx.lineTo(this.pos.x + 5, this.pos.y - 35 + bobOffset);
+            ctx.fill();
+        }
 
-        // Eyes
-        ctx.fillStyle = '#000';
-        ctx.beginPath();
-        ctx.arc(this.pos.x - 7, this.pos.y, 2, 0, Math.PI * 2);
-        ctx.arc(this.pos.x + 7, this.pos.y, 2, 0, Math.PI * 2);
-        ctx.fill();
-
-        // Whiskers
-        ctx.strokeStyle = '#fff';
-        ctx.lineWidth = 1;
-        ctx.beginPath();
-        ctx.moveTo(this.pos.x - 12, this.pos.y + 3); ctx.lineTo(this.pos.x - 28, this.pos.y);
-        ctx.moveTo(this.pos.x - 12, this.pos.y + 7); ctx.lineTo(this.pos.x - 28, this.pos.y + 7);
-        ctx.moveTo(this.pos.x + 12, this.pos.y + 3); ctx.lineTo(this.pos.x + 28, this.pos.y);
-        ctx.moveTo(this.pos.x + 12, this.pos.y + 7); ctx.lineTo(this.pos.x + 28, this.pos.y + 7);
-        ctx.stroke();
-
-        // Name Tag
-        ctx.shadowColor = 'rgba(0,0,0,0.8)';
-        ctx.shadowBlur = 4;
+        // Nickname
         ctx.fillStyle = 'white';
         ctx.font = 'bold 12px Arial';
         ctx.textAlign = 'center';
-        ctx.fillText(this.nickname, this.pos.x, this.pos.y - 40);
+        ctx.shadowColor = 'black';
+        ctx.shadowBlur = 4;
+        ctx.fillText(this.nickname, this.pos.x, this.pos.y - 65 + bobOffset);
         ctx.shadowBlur = 0;
-
-        // Speed particles
-        if (this.speedMultiplier > 1) {
-            this.speedParticles.forEach(p => {
-                ctx.fillStyle = `rgba(255, 200, 0, ${p.life})`;
-                ctx.beginPath();
-                ctx.arc(p.pos.x, p.pos.y, 3, 0, Math.PI * 2);
-                ctx.fill();
-            });
-        }
-
-        ctx.restore();
     }
 }
 
-class Door {
+class Door extends Entity {
     constructor(x, y, targetRoom, label) {
-        this.pos = new Vector2(x, y);
-        this.width = 100;
-        this.height = 100;
+        super(x, y);
+        this.width = 100;  // Standard Door Width
+        this.height = 120; // Standard Door Height
         this.targetRoom = targetRoom;
         this.label = label;
+        this.pos.y += 20;
     }
 
     checkCollision(playerPos) {
         return (playerPos.x > this.pos.x && playerPos.x < this.pos.x + this.width &&
-            playerPos.y > this.pos.y && playerPos.y < this.pos.y + this.height);
+            playerPos.y > this.pos.y - 20 && playerPos.y < this.pos.y + this.height - 20);
     }
 
-    draw(ctx) {
-        // Light spill effect (depth)
-        ctx.save();
-        ctx.globalAlpha = 0.3;
-        ctx.fillStyle = '#ffd700';
-        ctx.beginPath();
-        ctx.moveTo(this.pos.x + 10, this.pos.y + this.height);
-        ctx.lineTo(this.pos.x + this.width - 10, this.pos.y + this.height);
-        ctx.lineTo(this.pos.x + this.width + 20, this.pos.y + this.height + 40);
-        ctx.lineTo(this.pos.x - 20, this.pos.y + this.height + 40);
-        ctx.fill();
-        ctx.restore();
+    draw(ctx, assets) {
+        const img = assets.get('prop_door_frame');
 
-        // Door body
-        ctx.fillStyle = CONFIG.COLORS.WOOD;
-        ctx.fillRect(this.pos.x, this.pos.y, this.width, this.height);
+        // Draw Door
+        if (img) {
+            ctx.drawImage(img, this.pos.x, this.pos.y - this.height, this.width, this.height);
+        } else {
+            // Fallback
+            ctx.fillStyle = '#5d4037';
+            ctx.fillRect(this.pos.x, this.pos.y - this.height, this.width, this.height);
+            ctx.strokeStyle = '#3e2723';
+            ctx.lineWidth = 4;
+            ctx.strokeRect(this.pos.x, this.pos.y - this.height, this.width, this.height);
+        }
 
-        // Thick outer frame
-        ctx.strokeStyle = '#3e2723';
-        ctx.lineWidth = 6;
-        ctx.strokeRect(this.pos.x, this.pos.y, this.width, this.height);
-
-        // Doorknob
-        ctx.fillStyle = '#ffd700';
-        ctx.beginPath();
-        ctx.arc(this.pos.x + this.width - 15, this.pos.y + this.height / 2, 6, 0, Math.PI * 2);
-        ctx.fill();
-
-        // Label inside door with shadow
-        ctx.shadowColor = 'black';
-        ctx.shadowBlur = 4;
+        // Label
         ctx.fillStyle = 'white';
         ctx.font = 'bold 14px Arial';
         ctx.textAlign = 'center';
-        ctx.fillText(this.label, this.pos.x + this.width / 2, this.pos.y + 40);
+        ctx.shadowColor = 'black';
+        ctx.shadowBlur = 4;
+        ctx.fillText(this.label, this.pos.x + this.width / 2, this.pos.y - this.height - 10);
         ctx.shadowBlur = 0;
     }
 }
 
-class Interactable {
+class Interactable extends Entity {
     constructor(x, y, type, label) {
-        this.pos = new Vector2(x, y);
+        super(x, y);
         this.type = type;
         this.label = label;
-        this.width = 40;
-        this.height = 60;
-        this.glowPhase = Math.random() * Math.PI * 2;
         this.isOn = false;
         this.isPlaying = false;
-        this.pulsePhase = 0;
+
+        // SIZE POLICE: Force specific sizes for gameplay balance
+        const size = this.getSize();
+        this.width = size.w;
+        this.height = size.h;
+    }
+
+    // This function decides exactly how big everything should be
+    getSize() {
+        switch (this.type) {
+            case 'jukebox': return { w: 100, h: 120 };
+            case 'computer': return { w: 80, h: 80 }; // Desk size
+            case 'coffee': return { w: 60, h: 70 };
+            case 'bookshelf': return { w: 100, h: 150 };
+            case 'blueberry': return { w: 40, h: 40 };
+            case 'plant': return { w: 50, h: 70 };
+            default: return { w: 50, h: 50 }; // Default for unknowns
+        }
     }
 
     checkProximity(playerPos) {
-        return this.pos.dist(playerPos) < 60;
+        return this.pos.dist(playerPos) < 50;
     }
 
     getPrompt() {
@@ -531,123 +568,47 @@ class Interactable {
     interact(game) {
         if (this.type === 'coffee') {
             game.localPlayer.speedMultiplier = 1.8;
-            game.showFloatingText('CAFFEINE RUSH!', this.pos.x, this.pos.y - 30);
-            setTimeout(() => {
-                if (game.localPlayer) {
-                    game.localPlayer.speedMultiplier = 1.0;
-                }
-            }, 5000);
-            return false;
+            game.showFloatingText('CAFFEINE RUSH!', this.pos.x, this.pos.y - 50);
+            setTimeout(() => { if (game.localPlayer) game.localPlayer.speedMultiplier = 1.0; }, 5000);
         } else if (this.type === 'computer') {
             this.isOn = !this.isOn;
-            return false;
         } else if (this.type === 'jukebox') {
             this.isPlaying = !this.isPlaying;
-            if (this.isPlaying) {
-                game.bgm.play().catch(e => console.log("Audio play failed:", e));
-            } else {
-                game.bgm.pause();
-            }
-            return false;
+            if (this.isPlaying) game.bgm.play().catch(e => console.log(e));
+            else game.bgm.pause();
         } else if (this.type === 'blueberry') {
             return true;
         }
         return false;
     }
 
-    draw(ctx) {
-        if (this.type === 'blueberry') {
-            this.glowPhase += 0.05;
-            const glowRadius = 20 + Math.sin(this.glowPhase) * 5;
-            const glowGradient = ctx.createRadialGradient(this.pos.x, this.pos.y, 12, this.pos.x, this.pos.y, glowRadius);
-            glowGradient.addColorStop(0, 'rgba(67, 97, 238, 0.3)');
-            glowGradient.addColorStop(1, 'rgba(67, 97, 238, 0)');
-            ctx.fillStyle = glowGradient;
-            ctx.beginPath();
-            ctx.arc(this.pos.x, this.pos.y, glowRadius, 0, Math.PI * 2);
-            ctx.fill();
+    draw(ctx, assets, isHovered) {
+        // use 'prop_desk' for computers to save time
+        let assetKey = `prop_${this.type}`;
+        if (this.type === 'computer') assetKey = 'prop_desk_front';
 
-            const berryGradient = ctx.createRadialGradient(this.pos.x - 3, this.pos.y - 3, 2, this.pos.x, this.pos.y, 12);
-            berryGradient.addColorStop(0, '#6b8aff');
-            berryGradient.addColorStop(1, '#2d4bb5');
-            ctx.fillStyle = berryGradient;
-            ctx.beginPath();
-            ctx.arc(this.pos.x, this.pos.y, 12, 0, Math.PI * 2);
-            ctx.fill();
+        const img = assets.get(assetKey);
 
-            ctx.fillStyle = '#2ecc71';
-            ctx.beginPath();
-            ctx.ellipse(this.pos.x, this.pos.y - 10, 5, 3, Math.PI / 4, 0, Math.PI * 2);
-            ctx.fill();
-        } else if (this.type === 'coffee') {
-            // Coffee machine
-            ctx.fillStyle = '#cfd8dc'; // Silver
-            ctx.fillRect(this.pos.x - 20, this.pos.y - 30, 40, 60);
+        // Shadow
+        ctx.fillStyle = 'rgba(0,0,0,0.3)';
+        ctx.beginPath();
+        ctx.ellipse(this.pos.x, this.pos.y, this.width / 2, this.height / 5, 0, 0, Math.PI * 2);
+        ctx.fill();
 
-            ctx.fillStyle = '#3e2723';
-            ctx.fillRect(this.pos.x - 15, this.pos.y + 10, 30, 20);
-
-            ctx.fillStyle = '#8d6e63';
-            ctx.beginPath();
-            ctx.arc(this.pos.x, this.pos.y - 10, 8, 0, Math.PI * 2);
-            ctx.fill();
-
-            // Animated Steam
-            ctx.fillStyle = 'rgba(255, 255, 255, 0.4)';
-            const time = Date.now() / 200;
-            for (let i = 0; i < 3; i++) {
-                const offset = i * 10;
-                const y = this.pos.y - 40 - ((time * 10 + offset) % 30);
-                const x = this.pos.x + Math.sin(time + i) * 5;
-                ctx.beginPath();
-                ctx.arc(x, y, 3, 0, Math.PI * 2);
-                ctx.fill();
-            }
-        } else if (this.type === 'computer') {
-            // Monitor
-            ctx.fillStyle = '#424242';
-            ctx.fillRect(this.pos.x - 25, this.pos.y - 20, 50, 35);
-
-            if (this.isOn) {
-                ctx.fillStyle = '#00ff00';
-                ctx.font = '10px monospace';
-                ctx.textAlign = 'center';
-                ctx.fillText('10101', this.pos.x, this.pos.y - 10);
-                ctx.fillText('01010', this.pos.x, this.pos.y);
-            } else {
-                ctx.fillStyle = '#000';
-                ctx.fillRect(this.pos.x - 22, this.pos.y - 17, 44, 29);
-            }
-
-            ctx.fillStyle = '#616161';
-            ctx.fillRect(this.pos.x - 5, this.pos.y + 15, 10, 10);
-        } else if (this.type === 'jukebox') {
-            this.pulsePhase += 0.1;
-            const scale = this.isPlaying ? 1 + Math.sin(this.pulsePhase) * 0.1 : 1;
-
-            ctx.save();
-            ctx.translate(this.pos.x, this.pos.y);
-            ctx.scale(scale, scale);
-            ctx.translate(-this.pos.x, -this.pos.y);
-
-            const grad = ctx.createLinearGradient(this.pos.x - 30, this.pos.y - 40, this.pos.x + 30, this.pos.y + 40);
-            grad.addColorStop(0, '#ff6b9d');
-            grad.addColorStop(0.5, '#c44569');
-            grad.addColorStop(1, '#8e44ad');
-            ctx.fillStyle = grad;
-            ctx.fillRect(this.pos.x - 30, this.pos.y - 40, 60, 80);
-
-            if (this.isPlaying) {
-                ctx.fillStyle = '#ffd700';
-                for (let i = 0; i < 3; i++) {
-                    ctx.beginPath();
-                    ctx.arc(this.pos.x - 15 + i * 15, this.pos.y - 10, 5, 0, Math.PI * 2);
-                    ctx.fill();
-                }
-            }
-
-            ctx.restore();
+        if (isHovered) {
+            ctx.shadowColor = 'white';
+            ctx.shadowBlur = 10;
         }
+
+        if (img) {
+            // DRAW IMAGE AT FORCED SIZE, NOT IMAGE SIZE
+            ctx.drawImage(img, this.pos.x - this.width / 2, this.pos.y - this.height + 10, this.width, this.height);
+        } else {
+            // Fallback Box
+            ctx.fillStyle = '#bdc3c7';
+            ctx.fillRect(this.pos.x - this.width / 2, this.pos.y - this.height, this.width, this.height);
+        }
+        ctx.shadowBlur = 0;
     }
 }
 
@@ -676,17 +637,10 @@ class RoseParticle {
         ctx.globalAlpha = this.life;
         ctx.translate(this.pos.x, this.pos.y);
         ctx.rotate(this.rotation);
-
         ctx.fillStyle = this.color;
         ctx.beginPath();
         ctx.ellipse(0, 0, this.size, this.size * 0.7, 0, 0, Math.PI * 2);
         ctx.fill();
-
-        ctx.fillStyle = 'rgba(255, 255, 255, 0.3)';
-        ctx.beginPath();
-        ctx.ellipse(-this.size / 3, 0, this.size / 3, this.size / 2, 0, 0, Math.PI * 2);
-        ctx.fill();
-
         ctx.restore();
     }
 }
@@ -752,7 +706,6 @@ class Renderer {
         this.ctx = this.canvas.getContext('2d');
         this.assets = assets;
         this.camera = new Vector2(0, 0);
-        this.discoTime = 0;
         this.resize();
         window.addEventListener('resize', () => this.resize());
     }
@@ -773,212 +726,64 @@ class Renderer {
         this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
     }
 
-    drawRoom(room, isPartyTime = false) {
+    drawRoom(room, isPartyTime) {
         this.ctx.save();
         this.ctx.translate(-this.camera.x, -this.camera.y);
 
-        const W = CONFIG.WORLD_SIZE;
+        const W = CONFIG.WORLD_WIDTH;
+        const H = CONFIG.WORLD_HEIGHT;
+        const bgKey = `bg_${room}`;
+        const img = this.assets.get(bgKey);
 
-        if (room === 'office') {
-            this.ctx.fillStyle = CONFIG.COLORS.OFFICE_BG;
-            this.ctx.fillRect(0, 0, W, W);
+        if (img) {
+            this.ctx.drawImage(img, 0, 0, W, H);
+        } else {
+            // Fallback Backgrounds
+            if (room === 'office') this.ctx.fillStyle = CONFIG.COLORS.OFFICE_BG;
+            else if (room === 'study') this.ctx.fillStyle = CONFIG.COLORS.STUDY_BG;
+            else if (room === 'hangout') this.ctx.fillStyle = CONFIG.COLORS.HANGOUT_BG;
+            else if (room === 'matchi') this.ctx.fillStyle = CONFIG.COLORS.MATCHI_BG;
+            else this.ctx.fillStyle = '#333';
 
-            this.ctx.strokeStyle = 'rgba(255,255,255,0.03)';
+            this.ctx.fillRect(0, 0, W, H);
+
+            // Grid for fallback
+            this.ctx.strokeStyle = 'rgba(255,255,255,0.05)';
             this.ctx.lineWidth = 1;
             for (let x = 0; x < W; x += 50) {
-                for (let y = 0; y < W; y += 50) {
-                    this.ctx.strokeRect(x, y, 50, 50);
-                }
-            }
-
-            const rugGrad = this.ctx.createRadialGradient(W / 2, W / 2, 50, W / 2, W / 2, 150);
-            rugGrad.addColorStop(0, '#a0522d');
-            rugGrad.addColorStop(1, '#654321');
-            this.ctx.fillStyle = rugGrad;
-            this.ctx.beginPath();
-            this.ctx.arc(W / 2, W / 2, 150, 0, Math.PI * 2);
-            this.ctx.fill();
-
-            const desks = [
-                [100, 100], [W - 200, 100], [100, W - 200], [W - 200, W - 200]
-            ];
-            desks.forEach(([x, y]) => {
-                this.ctx.shadowColor = 'rgba(0,0,0,0.5)';
-                this.ctx.shadowBlur = 15;
-                this.ctx.shadowOffsetX = 5;
-                this.ctx.shadowOffsetY = 5;
-
-                const deskGrad = this.ctx.createLinearGradient(x, y, x, y + 80);
-                deskGrad.addColorStop(0, '#6d4c41');
-                deskGrad.addColorStop(1, '#3e2723');
-                this.ctx.fillStyle = deskGrad;
-                this.ctx.fillRect(x, y, 100, 80);
-
-                this.ctx.shadowBlur = 0;
-
-                this.ctx.shadowColor = CONFIG.COLORS.SCREEN;
-                this.ctx.shadowBlur = 20;
-                const screenGrad = this.ctx.createLinearGradient(x + 20, y + 10, x + 80, y + 50);
-                screenGrad.addColorStop(0, '#00ffff');
-                screenGrad.addColorStop(1, '#0088aa');
-                this.ctx.fillStyle = screenGrad;
-                this.ctx.fillRect(x + 20, y + 10, 60, 40);
-                this.ctx.shadowBlur = 0;
-
-                this.ctx.fillStyle = '#fff';
-                this.ctx.fillRect(x + 5, y + 55, 20, 15);
-                this.ctx.fillRect(x + 30, y + 60, 15, 12);
-
-                this.ctx.fillStyle = '#ffd700';
                 this.ctx.beginPath();
-                this.ctx.arc(x + 85, y + 65, 8, 0, Math.PI * 2);
-                this.ctx.fill();
-            });
-
-        } else if (room === 'study') {
-            this.ctx.fillStyle = CONFIG.COLORS.STUDY_BG;
-            this.ctx.fillRect(0, 0, W, W);
-
-            this.ctx.strokeStyle = 'rgba(0,0,0,0.1)';
-            this.ctx.lineWidth = 2;
-            for (let y = 0; y < W; y += 20) {
-                this.ctx.beginPath();
-                this.ctx.moveTo(0, y);
-                this.ctx.lineTo(W, y + Math.sin(y / 50) * 10);
+                this.ctx.moveTo(x, 0);
+                this.ctx.lineTo(x, H);
                 this.ctx.stroke();
             }
-
-            const tables = [
-                [200, 200], [W - 300, 200], [200, W - 300], [W - 300, W - 300]
-            ];
-            tables.forEach(([x, y]) => {
-                this.ctx.shadowColor = 'rgba(0,0,0,0.6)';
-                this.ctx.shadowBlur = 20;
-                this.ctx.shadowOffsetX = 8;
-                this.ctx.shadowOffsetY = 8;
-
-                const tableGrad = this.ctx.createRadialGradient(x + 60, y + 50, 20, x + 60, y + 50, 100);
-                tableGrad.addColorStop(0, '#8d6e63');
-                tableGrad.addColorStop(1, '#4e342e');
-                this.ctx.fillStyle = tableGrad;
-                this.ctx.fillRect(x, y, 120, 100);
-
-                this.ctx.shadowBlur = 0;
-
-                const colors = [
-                    ['#e74c3c', '#c0392b'],
-                    ['#3498db', '#2980b9'],
-                    ['#2ecc71', '#27ae60'],
-                    ['#f39c12', '#e67e22']
-                ];
-                for (let i = 0; i < 4; i++) {
-                    const bookGrad = this.ctx.createLinearGradient(x + 10 + i * 25, y + 20, x + 30 + i * 25, y + 50);
-                    bookGrad.addColorStop(0, colors[i][0]);
-                    bookGrad.addColorStop(1, colors[i][1]);
-                    this.ctx.fillStyle = bookGrad;
-                    this.ctx.fillRect(x + 10 + i * 25, y + 20, 20, 30);
-
-                    this.ctx.fillStyle = 'rgba(255,255,255,0.3)';
-                    this.ctx.fillRect(x + 10 + i * 25, y + 20, 3, 30);
-                }
-            });
-
-        } else if (room === 'hangout') {
-            const bgGrad = this.ctx.createLinearGradient(0, 0, 0, W);
-            bgGrad.addColorStop(0, '#1a237e');
-            bgGrad.addColorStop(1, '#0d1642');
-            this.ctx.fillStyle = bgGrad;
-            this.ctx.fillRect(0, 0, W, W);
-
-            // Disco Lights
-            if (isPartyTime) {
-                this.ctx.save();
-                this.ctx.globalCompositeOperation = 'overlay';
-                const time = Date.now() / 1000;
-                for (let i = 0; i < 5; i++) {
-                    const angle = time + i * (Math.PI * 2 / 5);
-                    const x = W / 2 + Math.cos(angle) * 300;
-                    const y = W / 2 + Math.sin(angle) * 300;
-
-                    const grad = this.ctx.createRadialGradient(x, y, 0, x, y, 200);
-                    grad.addColorStop(0, `hsla(${i * 72}, 100%, 50%, 0.5)`);
-                    grad.addColorStop(1, 'transparent');
-
-                    this.ctx.fillStyle = grad;
-                    this.ctx.beginPath();
-                    this.ctx.arc(x, y, 200, 0, Math.PI * 2);
-                    this.ctx.fill();
-                }
-                this.ctx.restore();
-            }
-
-            this.ctx.shadowColor = 'rgba(0,0,0,0.7)';
-            this.ctx.shadowBlur = 25;
-            const barGrad = this.ctx.createLinearGradient(100, 50, 100, 130);
-            barGrad.addColorStop(0, '#8d6e63');
-            barGrad.addColorStop(0.5, '#5d4037');
-            barGrad.addColorStop(1, '#3e2723');
-            this.ctx.fillStyle = barGrad;
-            this.ctx.fillRect(100, 50, W - 200, 80);
-            this.ctx.shadowBlur = 0;
-
-            const tables = [[300, 400], [W / 2, 500], [W - 300, 400]];
-            tables.forEach(([x, y]) => {
-                this.ctx.shadowColor = 'rgba(0,0,0,0.6)';
-                this.ctx.shadowBlur = 20;
-
-                const tableGrad = this.ctx.createRadialGradient(x, y, 20, x, y, 60);
-                tableGrad.addColorStop(0, '#a0522d');
-                tableGrad.addColorStop(1, '#654321');
-                this.ctx.fillStyle = tableGrad;
+            for (let y = 0; y < H; y += 50) {
                 this.ctx.beginPath();
-                this.ctx.arc(x, y, 60, 0, Math.PI * 2);
-                this.ctx.fill();
-
-                this.ctx.shadowBlur = 0;
-            });
-
-        } else if (room === 'matchi') {
-            const img = this.assets.get('matchiRoom');
-            if (img && !this.assets.useFallback) {
-                this.ctx.drawImage(img, 0, 0, W, W);
-            } else {
-                this.ctx.fillStyle = CONFIG.COLORS.MATCHI_BG;
-                this.ctx.fillRect(0, 0, W, W);
-
-                this.discoTime += 0.15;
-                const gridSize = 100;
-                for (let x = 0; x < W; x += gridSize) {
-                    for (let y = 0; y < W; y += gridSize) {
-                        const hue = (x + y + this.discoTime * 100) % 360;
-                        const brightness = 40 + Math.sin(this.discoTime + x / 100) * 20;
-                        this.ctx.fillStyle = `hsl(${hue}, 80%, ${brightness}%)`;
-                        this.ctx.fillRect(x, y, gridSize - 2, gridSize - 2);
-                    }
-                }
-
-                const ballGrad = this.ctx.createRadialGradient(W / 2 - 10, 90, 10, W / 2, 100, 40);
-                ballGrad.addColorStop(0, '#ffffff');
-                ballGrad.addColorStop(1, '#888888');
-                this.ctx.fillStyle = ballGrad;
-                this.ctx.beginPath();
-                this.ctx.arc(W / 2, 100, 40, 0, Math.PI * 2);
-                this.ctx.fill();
-
-                this.ctx.strokeStyle = '#fff';
-                this.ctx.lineWidth = 2;
-                for (let i = 0; i < 8; i++) {
-                    const angle = (i / 8) * Math.PI * 2;
-                    this.ctx.beginPath();
-                    this.ctx.moveTo(W / 2, 100);
-                    this.ctx.lineTo(W / 2 + Math.cos(angle) * 40, 100 + Math.sin(angle) * 40);
-                    this.ctx.stroke();
-                }
+                this.ctx.moveTo(0, y);
+                this.ctx.lineTo(W, y);
+                this.ctx.stroke();
             }
+        }
 
-        } else if (room === 'skyview') {
-            this.ctx.fillStyle = CONFIG.COLORS.SKYVIEW_BG;
-            this.ctx.fillRect(0, 0, W, W);
+        // Party Mode Effects (Hangout)
+        if (room === 'hangout' && isPartyTime) {
+            this.ctx.save();
+            this.ctx.globalCompositeOperation = 'overlay';
+            const time = Date.now() / 1000;
+            for (let i = 0; i < 5; i++) {
+                const angle = time + i * (Math.PI * 2 / 5);
+                const x = W / 2 + Math.cos(angle) * 300;
+                const y = W / 2 + Math.sin(angle) * 300;
+
+                const grad = this.ctx.createRadialGradient(x, y, 0, x, y, 200);
+                grad.addColorStop(0, `hsla(${i * 72}, 100%, 50%, 0.5)`);
+                grad.addColorStop(1, 'transparent');
+
+                this.ctx.fillStyle = grad;
+                this.ctx.beginPath();
+                this.ctx.arc(x, y, 200, 0, Math.PI * 2);
+                this.ctx.fill();
+            }
+            this.ctx.restore();
         }
 
         this.ctx.restore();
@@ -987,36 +792,44 @@ class Renderer {
     drawMaze(mazeGrid, cellW, cellH) {
         this.ctx.save();
         this.ctx.translate(-this.camera.x, -this.camera.y);
-
         this.ctx.strokeStyle = '#fff';
         this.ctx.lineWidth = 3;
 
         mazeGrid.forEach(cell => {
             const x = cell.c * cellW;
             const y = cell.r * cellH;
+            if (cell.walls.top) { this.ctx.beginPath(); this.ctx.moveTo(x, y); this.ctx.lineTo(x + cellW, y); this.ctx.stroke(); }
+            if (cell.walls.right) { this.ctx.beginPath(); this.ctx.moveTo(x + cellW, y); this.ctx.lineTo(x + cellW, y + cellH); this.ctx.stroke(); }
+            if (cell.walls.bottom) { this.ctx.beginPath(); this.ctx.moveTo(x, y + cellH); this.ctx.lineTo(x + cellW, y + cellH); this.ctx.stroke(); }
+            if (cell.walls.left) { this.ctx.beginPath(); this.ctx.moveTo(x, y); this.ctx.lineTo(x, y + cellH); this.ctx.stroke(); }
+        });
+        this.ctx.restore();
+    }
 
-            if (cell.walls.top) {
+    drawEntities(entities, hoveredEntity) {
+        this.ctx.save();
+        this.ctx.translate(-this.camera.x, -this.camera.y);
+
+        // Y-Sort
+        entities.sort((a, b) => a.getSortY() - b.getSortY());
+
+        entities.forEach(e => {
+            const isHovered = e === hoveredEntity;
+            e.draw(this.ctx, this.assets, isHovered);
+
+            // Debug Draw
+            if (window.game && window.game.debugMode) {
+                this.ctx.strokeStyle = 'red';
+                this.ctx.lineWidth = 2;
                 this.ctx.beginPath();
-                this.ctx.moveTo(x, y);
-                this.ctx.lineTo(x + cellW, y);
-                this.ctx.stroke();
-            }
-            if (cell.walls.right) {
-                this.ctx.beginPath();
-                this.ctx.moveTo(x + cellW, y);
-                this.ctx.lineTo(x + cellW, y + cellH);
-                this.ctx.stroke();
-            }
-            if (cell.walls.bottom) {
-                this.ctx.beginPath();
-                this.ctx.moveTo(x, y + cellH);
-                this.ctx.lineTo(x + cellW, y + cellH);
-                this.ctx.stroke();
-            }
-            if (cell.walls.left) {
-                this.ctx.beginPath();
-                this.ctx.moveTo(x, y);
-                this.ctx.lineTo(x, y + cellH);
+
+                if (e instanceof Player) {
+                    this.ctx.arc(e.pos.x, e.pos.y, e.radius || 12, 0, Math.PI * 2);
+                } else if (e instanceof Interactable) {
+                    this.ctx.arc(e.pos.x, e.pos.y, 20, 0, Math.PI * 2); // Interaction zone center
+                } else if (e instanceof Door) {
+                    this.ctx.rect(e.pos.x, e.pos.y - e.height, e.width, e.height);
+                }
                 this.ctx.stroke();
             }
         });
@@ -1024,37 +837,16 @@ class Renderer {
         this.ctx.restore();
     }
 
-    drawEntities(entities) {
-        this.ctx.save();
-        this.ctx.translate(-this.camera.x, -this.camera.y);
-        entities.sort((a, b) => a.pos.y - b.pos.y);
-        entities.forEach(e => e.draw(this.ctx));
-        this.ctx.restore();
-    }
-
     drawLighting(player) {
         const centerX = player.pos.x - this.camera.x;
         const centerY = player.pos.y - this.camera.y;
 
-        const lanternGrad = this.ctx.createRadialGradient(
-            centerX, centerY, 50,
-            centerX, centerY, 400
-        );
+        const lanternGrad = this.ctx.createRadialGradient(centerX, centerY, 50, centerX, centerY, 400);
         lanternGrad.addColorStop(0, 'rgba(0,0,0,0)');
         lanternGrad.addColorStop(0.5, 'rgba(0,0,0,0.3)');
         lanternGrad.addColorStop(1, 'rgba(0,0,0,0.7)');
 
         this.ctx.fillStyle = lanternGrad;
-        this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
-
-        const vignetteGrad = this.ctx.createRadialGradient(
-            this.canvas.width / 2, this.canvas.height / 2, this.canvas.width * 0.3,
-            this.canvas.width / 2, this.canvas.height / 2, this.canvas.width * 0.7
-        );
-        vignetteGrad.addColorStop(0, 'rgba(0,0,0,0)');
-        vignetteGrad.addColorStop(1, 'rgba(0,0,0,0.5)');
-
-        this.ctx.fillStyle = vignetteGrad;
         this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
     }
 }
@@ -1083,14 +875,20 @@ class Game {
         this.floatingTexts = [];
 
         // Audio System
-        this.bgm = new Audio('https://cdn.pixabay.com/audio/2022/05/27/audio_1808fbf07a.mp3');
-        this.bgm.loop = true;
+        try {
+            this.bgm = new Audio('https://cdn.pixabay.com/audio/2022/05/27/audio_1808fbf07a.mp3');
+            this.bgm.loop = true;
+            this.bgm.crossOrigin = "anonymous"; // Try to fix CORS
+        } catch (e) {
+            console.warn("Audio failed to initialize:", e);
+            this.bgm = { play: () => Promise.resolve(), pause: () => { } };
+        }
 
         this.mazeGrid = null;
         this.cellW = 0;
         this.cellH = 0;
-
         this.lastTime = 0;
+        this.debugMode = false;
     }
 
     async init() {
@@ -1101,9 +899,12 @@ class Game {
             const db = firebase.database();
             db.ref('global/cmd').on('value', (snap) => {
                 const cmdData = snap.val();
-                if (cmdData && cmdData.time && Date.now() - cmdData.time < 1000) {
-                    if (cmdData.cmd === 'teleport' && this.localPlayer) {
-                        this.switchRoom(cmdData.arg);
+                // Increased timeout to 10s to handle clock skew
+                if (cmdData && cmdData.time && Date.now() - cmdData.time < 10000) {
+                    if (cmdData.cmd === 'teleport' || cmdData.cmd === 'teleport_all') {
+                        if (this.localPlayer) this.switchRoom(cmdData.arg);
+                    } else if (cmdData.cmd === 'rose_shower') {
+                        this.triggerRoseShower();
                     }
                 }
             });
@@ -1112,8 +913,8 @@ class Game {
 
     start(nickname, role) {
         this.localPlayer = new Player(this.playerId, {
-            x: CONFIG.WORLD_SIZE / 2,
-            y: CONFIG.WORLD_SIZE / 2,
+            x: CONFIG.WORLD_WIDTH / 2,
+            y: CONFIG.WORLD_HEIGHT / 2,
             nickname: nickname,
             role: role,
             room: 'office'
@@ -1122,8 +923,8 @@ class Game {
         this.buildRoom('office');
 
         this.network.init(this.playerId, {
-            x: CONFIG.WORLD_SIZE / 2,
-            y: CONFIG.WORLD_SIZE / 2,
+            x: CONFIG.WORLD_WIDTH / 2,
+            y: CONFIG.WORLD_HEIGHT / 2,
             nickname: nickname,
             role: role,
             room: 'office'
@@ -1135,53 +936,52 @@ class Game {
     buildRoom(roomName) {
         this.doors = [];
         this.interactables = [];
+        const W = CONFIG.WORLD_WIDTH;
+        const H = CONFIG.WORLD_HEIGHT;
+        const centerX = W / 2;
+        const centerY = H / 2;
 
-        const W = CONFIG.WORLD_SIZE;
-        const center = W / 2;
-
+        // Structured Room Layouts
         if (roomName === 'office') {
-            this.doors.push(new Door(50, center - 50, 'study', 'STUDY'));
-            this.doors.push(new Door(W - 150, center - 50, 'hangout', 'HANGOUT'));
-            this.doors.push(new Door(center - 50, 50, 'matchi', 'MATCHI'));
-            this.doors.push(new Door(center - 50, W - 150, 'skyview', 'SKYVIEW'));
+            this.doors.push(new Door(50, centerY - 50, 'study', 'STUDY'));
+            this.doors.push(new Door(W - 150, centerY - 50, 'hangout', 'HANGOUT'));
+            this.doors.push(new Door(centerX - 50, 50, 'matchi', 'MATCHI'));
+            this.doors.push(new Door(centerX - 50, H - 150, 'skyview', 'SKYVIEW'));
 
-            // Coffee machine in top left corner
+            // Props
             this.interactables.push(new Interactable(75, 300, 'coffee', 'Coffee Machine'));
-
-            // Computers on desks
-            this.interactables.push(new Interactable(150, 150, 'computer', 'PC'));
-            this.interactables.push(new Interactable(W - 150, 150, 'computer', 'PC'));
-            this.interactables.push(new Interactable(150, W - 150, 'computer', 'PC'));
-            this.interactables.push(new Interactable(W - 150, W - 150, 'computer', 'PC'));
+            this.interactables.push(new Interactable(200, 200, 'computer', 'PC'));
+            this.interactables.push(new Interactable(W - 200, 200, 'computer', 'PC'));
+            this.interactables.push(new Interactable(200, H - 200, 'computer', 'PC'));
+            this.interactables.push(new Interactable(W - 200, H - 200, 'computer', 'PC'));
 
         } else if (roomName === 'study') {
-            this.doors.push(new Door(center - 50, W - 150, 'office', 'OFFICE'));
+            this.doors.push(new Door(centerX - 50, H - 150, 'office', 'OFFICE'));
+            this.interactables.push(new Interactable(200, 200, 'bookshelf', 'Books'));
+            this.interactables.push(new Interactable(W - 200, 200, 'bookshelf', 'Books'));
 
         } else if (roomName === 'hangout') {
-            this.doors.push(new Door(50, center - 50, 'office', 'OFFICE'));
-            this.interactables.push(new Interactable(center, 600, 'blueberry', 'Blueberry'));
-            this.interactables.push(new Interactable(W - 150, 400, 'jukebox', 'Jukebox'));
+            this.doors.push(new Door(50, centerY - 50, 'office', 'OFFICE'));
+            this.interactables.push(new Interactable(centerX, H - 200, 'blueberry', 'Blueberry'));
+            this.interactables.push(new Interactable(W - 150, centerY, 'jukebox', 'Jukebox'));
 
         } else if (roomName === 'matchi') {
-            this.doors.push(new Door(center - 50, W - 150, 'office', 'OFFICE'));
+            this.doors.push(new Door(centerX - 50, H - 150, 'office', 'OFFICE'));
 
         } else if (roomName === 'skyview') {
             this.doors.push(new Door(50, 50, 'office', 'OFFICE'));
-
             const today = new Date();
             const seed = today.getFullYear() * 10000 + (today.getMonth() + 1) * 100 + today.getDate();
-            const cols = 12;
-            const rows = 8;
-            const generator = new MazeGenerator(cols, rows, seed);
+            const generator = new MazeGenerator(16, 9, seed);
             this.mazeGrid = generator.generate();
-            this.cellW = W / cols;
-            this.cellH = W / rows;
+            this.cellW = W / 16;
+            this.cellH = H / 9;
         }
     }
 
     switchRoom(newRoom) {
         this.localPlayer.room = newRoom;
-        this.localPlayer.pos = new Vector2(CONFIG.WORLD_SIZE / 2, CONFIG.WORLD_SIZE / 2);
+        this.localPlayer.pos = new Vector2(CONFIG.WORLD_WIDTH / 2, CONFIG.WORLD_HEIGHT / 2);
         this.buildRoom(newRoom);
     }
 
@@ -1195,6 +995,7 @@ class Game {
         if (this.remotePlayers[id]) {
             this.remotePlayers[id].targetPos = new Vector2(data.x, data.y);
             this.remotePlayers[id].room = data.room;
+            this.remotePlayers[id].lastSeen = Date.now();
         }
     }
 
@@ -1217,44 +1018,39 @@ class Game {
     loop(timestamp) {
         const dt = (timestamp - this.lastTime) / 1000;
         this.lastTime = timestamp;
-
         this.update(dt);
         this.draw();
-
         requestAnimationFrame((t) => this.loop(t));
     }
 
     update(dt) {
         if (!this.localPlayer) return;
 
+        // UI Updates
         const chatUI = document.getElementById('chat-ui');
-        if (chatUI) {
-            chatUI.style.display = this.localPlayer.room === 'hangout' ? 'block' : 'none';
-        }
+        if (chatUI) chatUI.style.display = this.localPlayer.room === 'hangout' ? 'block' : 'none';
 
         const inventoryUI = document.getElementById('inventory-ui');
-        if (inventoryUI) {
-            inventoryUI.style.display = this.inventory.length > 0 ? 'block' : 'none';
-        }
+        if (inventoryUI) inventoryUI.style.display = this.inventory.length > 0 ? 'block' : 'none';
 
-        // Movement with speed multiplier
+        // Movement
         const move = this.input.direction.mult(CONFIG.PLAYER_SPEED * this.localPlayer.speedMultiplier * dt);
         this.localPlayer.pos = this.localPlayer.pos.add(move);
         this.localPlayer.isMoving = move.mag() > 0;
 
-        this.localPlayer.pos.x = Math.max(50, Math.min(CONFIG.WORLD_SIZE - 50, this.localPlayer.pos.x));
-        this.localPlayer.pos.y = Math.max(50, Math.min(CONFIG.WORLD_SIZE - 50, this.localPlayer.pos.y));
+        // Bounds
+        this.localPlayer.pos.x = Math.max(50, Math.min(CONFIG.WORLD_WIDTH - 50, this.localPlayer.pos.x));
+        this.localPlayer.pos.y = Math.max(50, Math.min(CONFIG.WORLD_HEIGHT - 50, this.localPlayer.pos.y));
 
+        // Maze Collision
         if (this.localPlayer.room === 'skyview' && this.mazeGrid) {
             const col = Math.floor(this.localPlayer.pos.x / this.cellW);
             const row = Math.floor(this.localPlayer.pos.y / this.cellH);
             const cell = this.mazeGrid[col + row * 12];
-
             if (cell) {
                 const cellX = col * this.cellW;
                 const cellY = row * this.cellH;
-                const margin = 20;
-
+                const margin = this.localPlayer.radius; // Use player radius
                 if (cell.walls.left && this.localPlayer.pos.x < cellX + margin) this.localPlayer.pos.x = cellX + margin;
                 if (cell.walls.right && this.localPlayer.pos.x > cellX + this.cellW - margin) this.localPlayer.pos.x = cellX + this.cellW - margin;
                 if (cell.walls.top && this.localPlayer.pos.y < cellY + margin) this.localPlayer.pos.y = cellY + margin;
@@ -1262,6 +1058,7 @@ class Game {
             }
         }
 
+        // Door Collision
         for (let door of this.doors) {
             if (door.checkCollision(this.localPlayer.pos)) {
                 this.switchRoom(door.targetRoom);
@@ -1269,6 +1066,7 @@ class Game {
             }
         }
 
+        // Interaction Proximity
         let nearObj = null;
         for (let obj of this.interactables) {
             if (obj.checkProximity(this.localPlayer.pos)) {
@@ -1280,7 +1078,7 @@ class Game {
         const bubble = document.getElementById('interaction-bubble');
         if (nearObj) {
             const screenX = nearObj.pos.x - this.renderer.camera.x;
-            const screenY = nearObj.pos.y - this.renderer.camera.y - 50;
+            const screenY = nearObj.pos.y - this.renderer.camera.y - 60;
             bubble.style.left = `${screenX}px`;
             bubble.style.top = `${screenY}px`;
             bubble.textContent = nearObj.getPrompt();
@@ -1301,9 +1099,18 @@ class Game {
             bubble.classList.add('hidden');
         }
 
-        Object.values(this.remotePlayers).forEach(p => p.update(dt));
-        this.localPlayer.update(dt);
+        // Remote Players Cleanup
+        const now = Date.now();
+        Object.keys(this.remotePlayers).forEach(id => {
+            const p = this.remotePlayers[id];
+            if (now - p.lastSeen > 5000) { // Reduced to 5 seconds
+                delete this.remotePlayers[id];
+                return;
+            }
+            p.update(dt);
+        });
 
+        this.localPlayer.update(dt);
         this.roseParticles.forEach(p => p.update(dt));
         this.roseParticles = this.roseParticles.filter(p => p.life > 0);
 
@@ -1322,11 +1129,9 @@ class Game {
         this.renderer.updateCamera(this.localPlayer.pos);
     }
 
-
     draw() {
         this.renderer.clear();
 
-        // Check for party mode
         const jukebox = this.interactables.find(i => i.type === 'jukebox');
         const isPartyTime = jukebox ? jukebox.isPlaying : false;
 
@@ -1343,7 +1148,16 @@ class Game {
             ...this.interactables
         ];
 
-        this.renderer.drawEntities(entities);
+        // Find hovered entity for outline effect
+        let hoveredEntity = null;
+        for (let obj of this.interactables) {
+            if (obj.checkProximity(this.localPlayer.pos)) {
+                hoveredEntity = obj;
+                break;
+            }
+        }
+
+        this.renderer.drawEntities(entities, hoveredEntity);
 
         this.renderer.ctx.save();
         this.renderer.ctx.translate(-this.renderer.camera.x, -this.renderer.camera.y);
@@ -1392,29 +1206,33 @@ class Game {
 
     executeAdminCmd(cmd, arg) {
         if (!this.isAdmin) return;
-        console.log("Admin Cmd:", cmd, arg);
 
+        // Broadcast command
+        if (typeof firebase !== 'undefined') {
+            firebase.database().ref('global/cmd').set({
+                cmd: cmd,
+                arg: arg,
+                time: Date.now()
+            });
+        }
+
+        // Local execution
         if (cmd === 'teleport_all') {
-            if (typeof firebase !== 'undefined') {
-                firebase.database().ref('global/cmd').set({
-                    cmd: 'teleport',
-                    arg: arg,
-                    time: Date.now()
-                });
-            }
             this.switchRoom(arg);
         } else if (cmd === 'rose_shower') {
-            if (this.localPlayer) {
-                for (let i = 0; i < 50; i++) {
-                    setTimeout(() => {
-                        this.roseParticles.push(new RoseParticle(
-                            this.localPlayer.pos.x,
-                            this.localPlayer.pos.y
-                        ));
-                    }, i * 50);
-                }
-                alert('🌹 Rose Shower Activated!');
+            this.triggerRoseShower();
+        }
+    }
+
+    triggerRoseShower() {
+        if (this.localPlayer) {
+            for (let i = 0; i < 50; i++) {
+                setTimeout(() => {
+                    this.roseParticles.push(new RoseParticle(this.localPlayer.pos.x, this.localPlayer.pos.y));
+                }, i * 50);
             }
+            // Show notification
+            this.showFloatingText('🌹 ROSE SHOWER! 🌹', this.localPlayer.pos.x, this.localPlayer.pos.y - 100);
         }
     }
 }
@@ -1422,39 +1240,40 @@ class Game {
 // ============================================================================
 // GLOBAL INITIALIZATION
 // ============================================================================
+// ============================================================================
+// GLOBAL INITIALIZATION
+// ============================================================================
 let game = null;
+
+// Define these immediately so they are available
+window.proceedToGenderSelection = function () {
+    const name = document.getElementById('nickname').value.trim();
+    if (!name) { alert("Name required!"); return; }
+    document.getElementById('name-step').classList.add('hidden');
+    document.getElementById('gender-step').classList.remove('hidden');
+};
+
+window.startGame = function (role) {
+    if (!game) { alert("Game is still loading... please wait."); return; }
+    const nickname = document.getElementById('nickname').value.trim();
+    if (!nickname) { alert("Please enter a name!"); return; }
+    document.getElementById('start-screen').classList.add('hidden');
+    document.getElementById('hud').classList.remove('hidden');
+    game.start(nickname, role);
+};
 
 (async function () {
     try {
         game = new Game();
         await game.init();
         window.game = game;
-
         window.adminCmd = (cmd, arg) => game.executeAdminCmd(cmd, arg);
-
-        window.startGame = function (role) {
-            const nickname = document.getElementById('nickname').value.trim();
-            if (!nickname) {
-                alert("Please enter a name!");
-                return;
-            }
-            document.getElementById('start-screen').classList.add('hidden');
-            document.getElementById('hud').classList.remove('hidden');
-            game.start(nickname, role);
-        };
-
-        window.proceedToGenderSelection = function () {
-            const name = document.getElementById('nickname').value.trim();
-            if (!name) {
-                alert("Name required!");
-                return;
-            }
-            document.getElementById('name-step').classList.add('hidden');
-            document.getElementById('gender-step').classList.remove('hidden');
-        };
-
     } catch (e) {
-        alert("CRITICAL ERROR: " + e.message);
-        console.error(e);
+        console.error("Game Initialization Error:", e);
+        if (e.message === 'Script error.') {
+            console.warn("Ignored cross-origin script error.");
+        } else {
+            alert("CRITICAL ERROR: " + e.message);
+        }
     }
 })();
